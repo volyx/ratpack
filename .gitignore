@@ -1,0 +1,4 @@
+.idea/*
+.gradle/*
+build/*
+/ratpack-demo.iml

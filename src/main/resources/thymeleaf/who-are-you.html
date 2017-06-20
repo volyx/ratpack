@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+
+
+<h1>Who are you?</h1>
+
+<form th:action="@{'/user/new'}" method="post">
+    <fieldset>
+        <input type="text" name="username" placeholder="Type your first name."/>
+        <input type="submit" value="Ok"/>
+    </fieldset>
+</form>
+</html>

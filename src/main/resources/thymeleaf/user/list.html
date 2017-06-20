@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+
+<h1>User list</h1>
+
+<p th:each="user : ${users}">
+    <a href="#" th:href="@{'/user/'+${user.id}}" th:text="${user.name}">
+        User name
+    </a>
+</p>
+
+<p>
+    <a href="/" th:href="@{/}">Return to home</a>
+</p>
+
+</html>
