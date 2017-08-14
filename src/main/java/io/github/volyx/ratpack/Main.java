@@ -1,14 +1,12 @@
-package pl.rg9.ratpack;
+package io.github.volyx.ratpack;
 
 
-import com.google.common.collect.ImmutableMap;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
-import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.slf4j.Logger;
@@ -25,14 +23,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class WebApp {
+public class Main {
 
-	private static final Logger log = LoggerFactory.getLogger(WebApp.class);
+	private static final Logger log = LoggerFactory.getLogger(Main.class);
 
 	public static void main(String[] args) throws Exception {
 
         Config conf = ConfigFactory.load();
-        System.out.println("The answer is: " + conf.getString("simple-app.answer"));
 
 		RatpackServer.start(server -> server
 			.serverConfig(c -> c.baseDir(BaseDir.find()))
