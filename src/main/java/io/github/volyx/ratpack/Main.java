@@ -1,429 +1,286 @@
 package io.github.volyx.ratpack;
 
-
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import org.rocksdb.ColumnFamilyDescriptor;
-import org.rocksdb.ColumnFamilyHandle;
-import org.rocksdb.ColumnFamilyOptions;
-import org.rocksdb.DBOptions;
-import org.rocksdb.RocksDB;
-import org.rocksdb.RocksDBException;
+import io.github.volyx.ratpack.model.Location;
+import io.github.volyx.ratpack.model.User;
+import io.github.volyx.ratpack.model.Visit;
+import io.github.volyx.ratpack.repository.LocationRepository;
+import io.github.volyx.ratpack.repository.UserRepository;
+import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.storage.Storage;
+import org.nustaq.serialization.FSTConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import ratpack.exec.Blocking;
+import ratpack.func.Function;
 import ratpack.guice.Guice;
 import ratpack.jackson.Jackson;
+import ratpack.registry.Registry;
 import ratpack.server.BaseDir;
 import ratpack.server.RatpackServer;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
+import javax.annotation.Nullable;
+import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
+import javax.validation.Validator;
+import javax.validation.ValidatorFactory;
 import java.util.Map;
+import java.util.Set;
 
 public class Main {
 
-	private static final Logger log = LoggerFactory.getLogger(Main.class);
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
+    public static FSTConfiguration conf = FSTConfiguration.createMinBinConfiguration();
 
-	public static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws Exception {
+        String profile = System.getProperty("profile");
+        Config config = ConfigFactory.load(String.format("application%s.conf", (profile != null)?  "." + profile : ""));
 
-        Config conf = ConfigFactory.load();
+        Storage storage = new Storage(config.getString("rocksdb"));
+        UserRepository userRepo = new UserRepository(storage);
+        LocationRepository locationRepo = new LocationRepository(storage);
+        VisitRepository visitRepo = new VisitRepository(storage);
 
-		RatpackServer.start(server -> server
-			.serverConfig(c -> c.baseDir(BaseDir.find()))
-			.registry(Guice.registry(b -> {
-                Storage storage = new Storage(conf.getString("rocksdb"));
-                storage.put(Type.user, "user".getBytes(), "value".getBytes());
-                byte[] res = storage.get(Type.user, "user".getBytes());
-                System.out.println(new String(res, "UTF-8"));
-                b.bindInstance(storage);
-				b.bindInstance(new UserRepository());
-				b.bindInstance(new LocationRepository());
-                b.bindInstance(new VisitRepository());
-			}))
-			.handlers(chain -> chain
-				.prefix("user", chain1 -> {
-					chain1
-							.get(":id", ctx -> {
-								UserRepository userRepository = ctx.get(UserRepository.class);
-								Map<String, String> pathTokens = ctx.getPathTokens();
-								String id = pathTokens.get("id");
-								ctx.byContent(byContentSpec -> byContentSpec
-										.json(() -> {
-											ctx.render(Jackson.json(userRepository.findById(id)));
-										})
-								);
-							})
-							.post(":id", ctx -> {
-								final String id = ctx.getPathTokens().get("id");
-								ctx.getRequest().getBody()
-										.then(data -> {
-											ctx.parse(Jackson.fromJson(User.class)).then(user -> {
-												UserRepository userRepository = ctx.get(UserRepository.class);
-												log.info("Start updating new user: {}.", id);
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
 
-												Blocking.get(() -> {
-													log.info("Update user to repo: {}.", id);
-													return userRepository.update(user);
-												}).then(r -> {
-													log.info("User update with id: {}.", r);
-												});
+        Function<Registry, Registry> registry = Guice.registry(b -> {
+            b.bindInstance(validator);
+            b.bindInstance(storage);
+            b.bindInstance(userRepo);
+            b.bindInstance(locationRepo);
+            b.bindInstance(visitRepo);
+        });
 
-												log.info("Finish updating new user: {}.", user.id);
-											});
-										});
-							})
-							.post(":id/new", ctx -> {
-								final String id = ctx.getPathTokens().get("id");
-								ctx.getRequest().getBody()
-										.then(data -> {
-											ctx.parse(Jackson.fromJson(User.class)).then(user -> {
-												UserRepository userRepository = ctx.get(UserRepository.class);
-												log.info("Start saving new user: {}.", id);
+        ObjectMapper mapper = new ObjectMapper();
 
-												Blocking.get(() -> {
-													log.info("Save user to repo: {}.", id);
-													return userRepository.save(user);
-												}).then(r -> {
-													log.info("User saved with id: {}.", r);
-												});
+        new Loader(config.getString("load.path"), userRepo, locationRepo, visitRepo, mapper).load();
 
-												log.info("Finish saving new user: {}.", user.id);
-											});
-										});
-							});
-				})
-				.prefix("location", chain1 -> {
-					chain1
-							.get(":id", ctx -> {
-								LocationRepository locationRepository = ctx.get(LocationRepository.class);
-								String id = ctx.getPathTokens().get("id");
-								ctx.byContent(byContentSpec -> byContentSpec
-										.json(() -> {
-											ctx.render(Jackson.json(locationRepository.findById(id)));
-										})
-								);
-							})
-							.post(":id", ctx -> {
-								final String id = ctx.getPathTokens().get("id");
-								ctx.getRequest().getBody()
-										.then(data -> {
-											ctx.parse(Jackson.fromJson(Location.class)).then(location -> {
-												LocationRepository locationRepository = ctx.get(LocationRepository.class);
-												log.info("Start updating location user: {}.", id);
+        RatpackServer s = RatpackServer.of(server -> {
 
-												Blocking.get(() -> {
-													log.info("Update location to repo: {}.", id);
-													return locationRepository.update(location);
-												}).then(r -> {
-													log.info("Location update with id: {}.", r);
-												});
+                    server
+                            .serverConfig(c -> c.baseDir(BaseDir.find()))
+                            .registry(registry)
+                            .handlers(chain -> chain
+                                            .prefix("user", chain1 -> {
+                                                chain1
+                                                        .get(":id", ctx -> {
+                                                            Map<String, String> pathTokens = ctx.getPathTokens();
+                                                            String idParam = pathTokens.get("id");
+                                                            ctx.byContent(byContentSpec -> byContentSpec
+                                                                    .json(() -> {
+                                                                        Integer id;
+                                                                        try {
+                                                                            id = Integer.parseInt(idParam);
+                                                                        } catch (NumberFormatException e) {
+                                                                            log.error(e.getMessage(), e);
+                                                                            ctx.getResponse().status(400).send(e.getMessage());
+                                                                            return;
+                                                                        }
+                                                                        UserRepository userRepository = ctx.get(UserRepository.class);
+                                                                        @Nullable User user = userRepository.findById(id);
+                                                                        if (user == null) {
+                                                                            ctx.getResponse().status(400).send("Not found " + id);
+                                                                            return;
+                                                                        }
+                                                                        ctx.render(Jackson.json(user));
+                                                                    })
+                                                            );
+                                                        })
+                                                        .post(":id", ctx -> {
+                                                            final String id = ctx.getPathTokens().get("id");
+                                                            ctx.getRequest().getBody()
+                                                                    .then(data -> {
+                                                                        ctx.parse(Jackson.fromJson(User.class)).then(user -> {
+                                                                            UserRepository userRepository = ctx.get(UserRepository.class);
+                                                                            log.info("Start updating new user: {}.", id);
 
-												log.info("Finish updating new location: {}.", location.id);
-											});
-										});
-							})
-							.post(":id/new", ctx -> {
-								final String id = ctx.getPathTokens().get("id");
-								ctx.getRequest().getBody()
-										.then(data -> {
-											ctx.parse(Jackson.fromJson(Location.class)).then(location -> {
-												LocationRepository locationRepository = ctx.get(LocationRepository.class);
-												log.info("Start saving new location: {}.", id);
+                                                                            Blocking.get(() -> {
+                                                                                log.info("Update user to repo: {}.", id);
+                                                                                return userRepository.update(user);
+                                                                            }).then(r -> {
+                                                                                log.info("User update with id: {}.", r);
+                                                                            });
 
-												Blocking.get(() -> {
-													log.info("Save location to repo: {}.", id);
-													return locationRepository.save(location);
-												}).then(r -> {
-													log.info("Location saved with id: {}.", r);
-												});
+                                                                            log.info("Finish updating new user: {}.", user.id);
+                                                                        });
+                                                                    });
+                                                        })
+                                                        .post(":id/new", ctx -> {
+                                                            final String id = ctx.getPathTokens().get("id");
+                                                            ctx.getRequest().getBody()
+                                                                    .then(data -> {
+                                                                        ctx.parse(Jackson.fromJson(User.class)).then(user -> {
+                                                                            Set<ConstraintViolation<User>> violations = validator.validate(user);
+                                                                            for (ConstraintViolation<User> violation : violations) {
+                                                                                log.error(violation.getMessage());
+                                                                            }
+                                                                            if (!violations.isEmpty()) {
+                                                                                ctx.getResponse().status(400).send(String.valueOf(violations.stream().map(ConstraintViolation::getMessage).reduce((s1, s2) -> s1 + s2)));
+                                                                                return;
+                                                                            }
+                                                                            UserRepository userRepository = ctx.get(UserRepository.class);
+                                                                            log.info("Start saving new user: {}.", id);
 
-												log.info("Finish saving new location: {}.", location.id);
-											});
-										});
-							});
-				})
-				.prefix("visit", chain1 -> {
-					chain1
-							.get(":id", ctx -> {
-								VisitRepository visitRepository = ctx.get(VisitRepository.class);
-								String id = ctx.getPathTokens().get("id");
-								ctx.byContent(byContentSpec -> byContentSpec
-										.json(() -> {
-											ctx.render(Jackson.json(visitRepository.findById(id)));
-										})
-								);
-							})
-							.post(":id", ctx -> {
-								final String id = ctx.getPathTokens().get("id");
-								ctx.getRequest().getBody()
-										.then(data -> {
-											ctx.parse(Jackson.fromJson(Visit.class)).then(visit -> {
-												VisitRepository visitRepository = ctx.get(VisitRepository.class);
-												log.info("Start updating visit user: {}.", id);
+                                                                            Blocking.get(() -> {
+                                                                                log.info("Save user to repo: {}.", id);
+                                                                                return userRepository.save(user);
+                                                                            }).then(r -> {
+                                                                                log.info("User saved with id: {}.", r);
+                                                                            });
 
-												Blocking.get(() -> {
-													log.info("Updating visit to repo: {}.", id);
-													return visitRepository.update(visit);
-												}).then(r -> {
-													log.info("Visit update with id: {}.", r);
-												});
+                                                                            log.info("Finish saving new user: {}.", user.id);
+                                                                        });
+                                                                    });
+                                                        });
+                                            })
+                                            .prefix("location", chain1 -> {
+                                                chain1
+                                                        .get(":id", ctx -> {
+                                                            LocationRepository locationRepository = ctx.get(LocationRepository.class);
+                                                            String idParam = ctx.getPathTokens().get("id");
+                                                            ctx.byContent(byContentSpec -> byContentSpec
+                                                                    .json(() -> {
+                                                                        Integer id;
+                                                                        try {
+                                                                            id = Integer.parseInt(idParam);
+                                                                        } catch (NumberFormatException e) {
+                                                                            log.error(e.getMessage(), e);
+                                                                            ctx.getResponse().status(400).send(e.getMessage());
+                                                                            return;
+                                                                        }
+                                                                        ctx.render(Jackson.json(locationRepository.findById(id)));
+                                                                    })
+                                                            );
+                                                        })
+                                                        .post(":id", ctx -> {
+                                                            final String id = ctx.getPathTokens().get("id");
+                                                            ctx.getRequest().getBody()
+                                                                    .then(data -> {
+                                                                        ctx.parse(Jackson.fromJson(Location.class)).then(location -> {
+                                                                            LocationRepository locationRepository = ctx.get(LocationRepository.class);
+                                                                            log.info("Start updating location user: {}.", id);
 
-												log.info("Finish updating new visit: {}.", visit.id);
-											});
-										});
-							})
-							.post(":id/new", ctx -> {
-								final String id = ctx.getPathTokens().get("id");
-								ctx.getRequest().getBody()
-										.then(data -> {
-											ctx.parse(Jackson.fromJson(Visit.class)).then(visit -> {
-												VisitRepository visitRepository = ctx.get(VisitRepository.class);
-												log.info("Start saving new visit: {}.", id);
+                                                                            Blocking.get(() -> {
+                                                                                log.info("Update location to repo: {}.", id);
+                                                                                return locationRepository.update(location);
+                                                                            }).then(r -> {
+                                                                                log.info("Location update with id: {}.", r);
+                                                                            });
 
-												Blocking.get(() -> {
-													log.info("Save visit to repo: {}.", id);
-													return visitRepository.save(visit);
-												}).then(r -> {
-													log.info("Visit saved with id: {}.", r);
-												});
+                                                                            log.info("Finish updating new location: {}.", location.id);
+                                                                        });
+                                                                    });
+                                                        })
+                                                        .post(":id/new", ctx -> {
+                                                            final String id = ctx.getPathTokens().get("id");
+                                                            ctx.getRequest().getBody()
+                                                                    .then(data -> {
+                                                                        ctx.parse(Jackson.fromJson(Location.class)).then(location -> {
+                                                                            LocationRepository locationRepository = ctx.get(LocationRepository.class);
+                                                                            log.info("Start saving new location: {}.", id);
 
-												log.info("Finish saving new visit: {}.", visit.id);
-											});
-										});
-							});
-				})
-				.get("/users/:id/visits", ctx -> {
+                                                                            Blocking.get(() -> {
+                                                                                log.info("Save location to repo: {}.", id);
+                                                                                return locationRepository.save(location);
+                                                                            }).then(r -> {
+                                                                                log.info("Location saved with id: {}.", r);
+                                                                            });
+
+                                                                            log.info("Finish saving new location: {}.", location.id);
+                                                                        });
+                                                                    });
+                                                        });
+                                            })
+                                            .prefix("visit", chain1 -> {
+                                                chain1
+                                                        .get(":id", ctx -> {
+                                                            VisitRepository visitRepository = ctx.get(VisitRepository.class);
+                                                            String idParam = ctx.getPathTokens().get("id");
+                                                            ctx.byContent(byContentSpec -> byContentSpec
+                                                                    .json(() -> {
+                                                                        Integer id;
+                                                                        try {
+                                                                            id = Integer.parseInt(idParam);
+                                                                        } catch (NumberFormatException e) {
+                                                                            log.error(e.getMessage(), e);
+                                                                            ctx.getResponse().status(400).send(e.getMessage());
+                                                                            return;
+                                                                        }
+                                                                        ctx.render(Jackson.json(visitRepository.findById(id)));
+                                                                    })
+                                                            );
+                                                        })
+                                                        .post(":id", ctx -> {
+                                                            final String id = ctx.getPathTokens().get("id");
+                                                            ctx.getRequest().getBody()
+                                                                    .then(data -> {
+                                                                        ctx.parse(Jackson.fromJson(Visit.class)).then(visit -> {
+                                                                            VisitRepository visitRepository = ctx.get(VisitRepository.class);
+                                                                            log.info("Start updating visit user: {}.", id);
+
+                                                                            Blocking.get(() -> {
+                                                                                log.info("Updating visit to repo: {}.", id);
+                                                                                return visitRepository.update(visit);
+                                                                            }).then(r -> {
+                                                                                log.info("Visit update with id: {}.", r);
+                                                                            });
+
+                                                                            log.info("Finish updating new visit: {}.", visit.id);
+                                                                        });
+                                                                    });
+                                                        })
+                                                        .post(":id/new", ctx -> {
+                                                            final String id = ctx.getPathTokens().get("id");
+                                                            ctx.getRequest().getBody()
+                                                                    .then(data -> {
+                                                                        ctx.parse(Jackson.fromJson(Visit.class)).then(visit -> {
+                                                                            VisitRepository visitRepository = ctx.get(VisitRepository.class);
+                                                                            log.info("Start saving new visit: {}.", id);
+
+                                                                            Blocking.get(() -> {
+                                                                                log.info("Save visit to repo: {}.", id);
+                                                                                return visitRepository.save(visit);
+                                                                            }).then(r -> {
+                                                                                log.info("Visit saved with id: {}.", r);
+                                                                            });
+
+                                                                            log.info("Finish saving new visit: {}.", visit.id);
+                                                                        });
+                                                                    });
+                                                        });
+                                            })
+                                            .get("/users/:id/visits", ctx -> {
 //					для получения списка посещений пользователем
-				})
-				.get("/locations/:id/avg", ctx -> {
+                                            })
+                                            .get("/locations/:id/avg", ctx -> {
 //					для получения средней оценки достопримечательности
-				})
-			)
-		);
-	}
-
-	static class UserRepository {
-
-		public User save(User user) {
-			return null;
-		}
-
-		public User findById(String id) {
-			return null;
-		}
-
-		public User update(User user) {
-			return null;
-		}
-	}
-
-	static class LocationRepository {
-
-		public Location findById(String id) {
-            return null;
-		}
-
-		public Location update(Location location) {
-            return null;
-		}
-
-		public Location save(Location location) {
-            return null;
-		}
-	}
-
-	static class VisitRepository {
-
-		public Visit findById(String id) {
-            return null;
-		}
-
-		public Visit update(Visit visit) {
-            return null;
-		}
-
-		public Visit save(Visit visit) {
-            return null;
-		}
-	}
-
-	static class Storage {
-        private final Map<Type, Integer> typeHandle = new HashMap<>();
-        private String path;
-
-        Storage(String path) {
-            this.path = path;
-            RocksDB.loadLibrary();
-            try (final ColumnFamilyOptions cfOpts = new ColumnFamilyOptions().optimizeUniversalStyleCompaction()) {
-
-                // list of column family descriptors, first entry must always be default column family
-                final List<ColumnFamilyDescriptor> cfDescriptors = Arrays.asList(
-                        new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, cfOpts),
-                        new ColumnFamilyDescriptor(Type.user.name().getBytes(), cfOpts),
-                        new ColumnFamilyDescriptor(Type.location.name().getBytes(), cfOpts),
-                        new ColumnFamilyDescriptor(Type.visit.name().getBytes(), cfOpts)
-                );
-
-                // a list which will hold the handles for the column families once the db is opened
-                final List<ColumnFamilyHandle> columnFamilyHandleList = new ArrayList<>();
-
-                try (final DBOptions options = new DBOptions()
-                        .setCreateIfMissing(true)
-                        .setCreateMissingColumnFamilies(true);
-                     final RocksDB db = RocksDB.open(options, path, cfDescriptors, columnFamilyHandleList)) {
-                    typeHandle.put(Type.user, 1);
-                    typeHandle.put(Type.location, 2);
-                    typeHandle.put(Type.visit, 3);
-
-
-                    try {
-
-                        // do something
-
-                    } finally {
-
-                        // NOTE frees the column family handles before freeing the db
-                        for (final ColumnFamilyHandle columnFamilyHandle : columnFamilyHandleList) {
-                            columnFamilyHandle.close();
-                        }
-                    }
-                } catch (RocksDBException e) {
-                    throw new RuntimeException(e);
+                                            })
+                            );
                 }
-            }
-		}
+        );
 
-        public byte[] get(Type type, byte[] key) {
-            try (final ColumnFamilyOptions cfOpts = new ColumnFamilyOptions().optimizeUniversalStyleCompaction()) {
-                final List<ColumnFamilyDescriptor> cfDescriptors = Arrays.asList(
-                        new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, cfOpts),
-                        new ColumnFamilyDescriptor(Type.user.name().getBytes(), cfOpts),
-                        new ColumnFamilyDescriptor(Type.location.name().getBytes(), cfOpts),
-                        new ColumnFamilyDescriptor(Type.visit.name().getBytes(), cfOpts)
-                );
+        s.start();
 
-                final List<ColumnFamilyHandle> columnFamilyHandleList = new ArrayList<>();
-
-                try (final DBOptions options = new DBOptions();
-                     final RocksDB db = RocksDB.open(options, path, cfDescriptors, columnFamilyHandleList)) {
-                    try {
-                        return db.get(columnFamilyHandleList.get(typeHandle.get(type)), key);
-                    } finally {
-
-                        // NOTE frees the column family handles before freeing the db
-                        for (final ColumnFamilyHandle columnFamilyHandle : columnFamilyHandleList) {
-                            columnFamilyHandle.close();
-                        }
-                    }
-                } catch (RocksDBException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-		}
-
-		public void put(Type type, byte[] key, byte[] value) {
-            try (final ColumnFamilyOptions cfOpts = new ColumnFamilyOptions().optimizeUniversalStyleCompaction()) {
-
-                // list of column family descriptors, first entry must always be default column family
-                final List<ColumnFamilyDescriptor> cfDescriptors = Arrays.asList(
-                        new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, cfOpts),
-                        new ColumnFamilyDescriptor(Type.user.name().getBytes(), cfOpts),
-                        new ColumnFamilyDescriptor(Type.location.name().getBytes(), cfOpts),
-                        new ColumnFamilyDescriptor(Type.visit.name().getBytes(), cfOpts)
-                );
-
-                // a list which will hold the handles for the column families once the db is opened
-                final List<ColumnFamilyHandle> columnFamilyHandleList = new ArrayList<>();
-
-                try (final DBOptions options = new DBOptions();
-                     final RocksDB db = RocksDB.open(options, path, cfDescriptors, columnFamilyHandleList)) {
-
-                    try {
-                        db.put(columnFamilyHandleList.get(typeHandle.get(type)), key, value);
-                    } finally {
-
-                        // NOTE frees the column family handles before freeing the db
-                        for (final ColumnFamilyHandle columnFamilyHandle : columnFamilyHandleList) {
-                            columnFamilyHandle.close();
-                        }
-                    }
-                } catch (RocksDBException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-		}
-	}
-
-	enum Type {
-	    user, location, visit;
+//        ServerBackedApplicationUnderTest.of(s).test(httpClient -> {
+//            User user = new User(1, "123", "a", "v", Gender.m, System.currentTimeMillis());
+//            Assert.assertTrue(httpClient.post("user/" + user.id + "/new").getStatus().equals(Status.OK));
+//            for (User user : userRepo.findAll()) {
+//                Assert.assertTrue(httpClient.get("user/" + user.id).getStatus().equals(Status.OK));
+//            }
+//            for (Location location : locationRepo.findAll()) {
+//                Assert.assertTrue(httpClient.get("location/" + location.id).getStatus().equals(Status.OK));
+//            }
+//            for (Visit visit : visitRepo.findAll()) {
+//                Assert.assertTrue(httpClient.get("visit/" + visit.id).getStatus().equals(Status.OK));
+//            }
+//        });
     }
 
 
-	static class User {
-		/**
-		 * id - уникальный внешний идентификатор пользователя.
-		 * Устанавливается тестирующей системой и используется затем, для проверки ответов сервера.
-		 * 32-разрядное целое число.
-		 */
-		public final Integer id;
-		/**
-		 * email - адрес электронной почты пользователя.
-		 * Тип - unicode-строка длиной до 100 символов.
-		 * Гарантируется уникальность.
-		 */
-		public final String email;
-		public final String first_name;
-		public final String last_name;
-		public final Gender gender;
-		public final Long birth_date;
 
 
-		User(Integer id, String email, String first_name, String last_name, Gender gender, Long birth_date) {
-			this.id = id;
-			this.email = email;
-			this.first_name = first_name;
-			this.last_name = last_name;
-			this.gender = gender;
-			this.birth_date = birth_date;
-		}
-	}
 
-	enum Gender {
-		m,f;
-	}
-
-	class Location {
-		public final Integer id;
-		public final String place;
-		public final String country;
-		public final String city;
-		public final Integer distance;
-
-		Location(Integer id, String place, String country, String city, Integer distance) {
-			this.id = id;
-			this.place = place;
-			this.country = country;
-			this.city = city;
-			this.distance = distance;
-		}
-	}
-
-	class Visit {
-		public final Integer id;
-		public final Integer location;
-		public final Integer user;
-		public final Long visited_at;
-		public final Integer mark;
-
-		Visit(Integer id, Integer location, Integer user, Long visited_at, Integer mark) {
-			this.id = id;
-			this.location = location;
-			this.user = user;
-			this.visited_at = visited_at;
-			this.mark = mark;
-		}
-	}
 }
