@@ -3,6 +3,7 @@ package io.github.volyx.ratpack;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import com.typesafe.config.ConfigValue;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
@@ -16,6 +17,8 @@ import org.slf4j.LoggerFactory;
 import ratpack.exec.Blocking;
 import ratpack.func.Function;
 import ratpack.guice.Guice;
+import ratpack.http.MediaType;
+import ratpack.http.MutableHeaders;
 import ratpack.jackson.Jackson;
 import ratpack.registry.Registry;
 import ratpack.server.BaseDir;
@@ -36,8 +39,12 @@ public class Main {
 
     public static void main(String[] args) throws Exception {
         String profile = System.getProperty("profile");
-        Config config = ConfigFactory.load(String.format("application%s.conf", (profile != null)?  "." + profile : ""));
 
+        Config config = ConfigFactory.load(String.format("application%s.conf", (profile != null)?  "." + profile : ""));
+        log.info("Profile {}", profile);
+        for (Map.Entry<String, ConfigValue> entry : config.entrySet()) {
+            log.info("{} {}", entry.getKey(), entry.getValue().render());
+        }
         Storage storage = new Storage(config.getString("rocksdb"));
         UserRepository userRepo = new UserRepository(storage);
         LocationRepository locationRepo = new LocationRepository(storage);
@@ -85,8 +92,14 @@ public class Main {
                                                                             ctx.getResponse().status(400).send("Not found " + id);
                                                                             return;
                                                                         }
-                                                                        ctx.render(Jackson.json(user));
-                                                                    })
+                                                                        MutableHeaders headers = ctx.getResponse().getHeaders();
+                                                                        headers.add("Connection", "keep-alive");
+//                                                                        ctx.render(Jackson.json(user));
+                                                                        String json = mapper.writeValueAsString(user);
+                                                                        headers.add("Content-Length", json.length());
+                                                                        ctx.render(json);
+
+                                                                })
                                                             );
                                                         })
                                                         .post(":id", ctx -> {

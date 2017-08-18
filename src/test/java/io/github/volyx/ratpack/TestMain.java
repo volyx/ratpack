@@ -38,6 +38,7 @@ public class TestMain {
                 .build();
 
         Response response = client.newCall(request).execute();
+        System.out.println(response.headers());
         return response.body().string();
     }
 
@@ -51,7 +52,8 @@ public class TestMain {
         return response.body().string();
     }
 
-    public static void main(String[] args) throws IOException {
+    @Test
+    public void test() throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         URL url = TestMain.class.getClassLoader().getResource("data.zip");
         List<User> userList = new ArrayList<>();
@@ -85,7 +87,7 @@ public class TestMain {
             throw new UncheckedIOException(e);
         }
         for (User user : userList) {
-            String userJson = run("http://localhost:8080/user/" + user.id);
+            String userJson = run("http://localhost:5050/user/" + user.id);
             User get = mapper.readValue(userJson, User.class);
             Assert.assertEquals(user.id, get.id);
             Assert.assertEquals(user.email, get.email);
@@ -93,6 +95,7 @@ public class TestMain {
             Assert.assertEquals(user.last_name, get.last_name);
             Assert.assertEquals(user.birth_date, get.birth_date);
             Assert.assertEquals(user.gender, get.gender);
+            System.out.println(mapper.writeValueAsString(get));
         }
 
     }
