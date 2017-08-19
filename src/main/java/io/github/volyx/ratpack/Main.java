@@ -38,6 +38,7 @@ public class Main {
         log.info("Profile {}", profile);
 
         Storage storage = new Storage(config.getString("rocksdb"));
+        int port = config.getInt("port");
         Gson gson = new Gson();
         UserRepository userRepo = new UserRepository(storage);
         LocationRepository locationRepo = new LocationRepository(storage);
@@ -51,7 +52,7 @@ public class Main {
 
 
         NettyHttpService service = NettyHttpService.builder("super")
-                .setPort(5050)
+                .setPort(port)
                 .setHost("0.0.0.0")
                 .addHttpHandlers(ImmutableList.of(
                         new UserHandler(userRepo, validator, gson),

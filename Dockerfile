@@ -15,7 +15,5 @@ RUN mkdir /data
 
 COPY build/libs/ratpack-java-demo-1.0-SNAPSHOT-all.jar /
 
-#VOLUME /data:/data
-
-EXPOSE 5050:80
+EXPOSE 80
 ENTRYPOINT ["java", "-Dprofile=prod", "-jar", "ratpack-java-demo-1.0-SNAPSHOT-all.jar"]
