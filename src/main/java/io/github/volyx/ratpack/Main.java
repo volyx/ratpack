@@ -7,7 +7,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.gson.Gson;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigValue;
 import io.github.volyx.ratpack.handler.LocationHandler;
 import io.github.volyx.ratpack.handler.UserHandler;
 import io.github.volyx.ratpack.handler.VisitHandler;
@@ -21,15 +20,15 @@ import org.nustaq.serialization.FSTConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.Validation;
-import javax.validation.Validator;
-import javax.validation.ValidatorFactory;
-import java.util.Map;
+import javax.annotation.Nonnull;
+import java.util.Objects;
 
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
     public static FSTConfiguration conf = FSTConfiguration.createMinBinConfiguration();
+    @Nonnull
+    public static Long timestamp;
 
     public static void main(String[] args) {
         String profile = System.getProperty("profile");
@@ -42,22 +41,19 @@ public class Main {
         Gson gson = new Gson();
         UserRepository userRepo = new UserRepository(storage);
         LocationRepository locationRepo = new LocationRepository(storage);
-        VisitRepository visitRepo = new VisitRepository(storage);
+        VisitRepository visitRepo = new VisitRepository(storage, locationRepo);
 
-        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
-        Validator validator = factory.getValidator();
-
-        new Loader(config.getString("load.path"), userRepo, locationRepo, visitRepo, gson).load();
-
-
+        Loader loader = new Loader(config, userRepo, locationRepo, visitRepo, gson);
+        loader.load();
+        timestamp = Objects.requireNonNull(loader.getTimestamp());
 
         NettyHttpService service = NettyHttpService.builder("super")
                 .setPort(port)
                 .setHost("0.0.0.0")
                 .addHttpHandlers(ImmutableList.of(
-                        new UserHandler(userRepo, validator, gson),
-                        new LocationHandler(locationRepo, validator, gson),
-                        new VisitHandler(visitRepo, validator, gson)
+                        new UserHandler(userRepo, visitRepo, gson),
+                        new LocationHandler(locationRepo, visitRepo, userRepo, gson),
+                        new VisitHandler(visitRepo, gson)
                 ))
                 .setExceptionHandler(new ExceptionHandler() {
 

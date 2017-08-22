@@ -2,6 +2,7 @@ package io.github.volyx.ratpack;
 
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
+import com.typesafe.config.Config;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
@@ -12,16 +13,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
+import java.nio.channels.MulticastChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Enumeration;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -38,9 +42,11 @@ public class Loader {
     private final VisitRepository visitRepository;
     @Nonnull
     private final Gson gson;
+    @Nonnull
+    private Long timestamp;
 
-    public Loader(@Nonnull String path, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository, @Nonnull Gson gson) {
-        this.path = path;
+    public Loader(@Nonnull Config config, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository, @Nonnull Gson gson) {
+        this.path = config.getString("load.path");
         this.userRepository = userRepository;
         this.locationRepository = locationRepository;
         this.visitRepository = visitRepository;
@@ -56,22 +62,26 @@ public class Loader {
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
                     try (InputStream is = file.getInputStream(entry)) {
-                        logger.info("{}", entry.getName());
-                        if (entry.getName().contains("users")) {
+                        String entryName = entry.getName();
+                        logger.info("{}", entryName);
+                        if (entryName.equals("options.txt")) {
+                            this.timestamp = this.readTimestamp(is);
+                        }
+                        if (entryName.contains("users")) {
                             try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
                                 UserContainer userContainer = gson.fromJson(jsonReader, UserContainer.class);
                                 logger.info("Load {} users", userContainer.users.length);
                                 userRepository.save(Arrays.asList(userContainer.users));
                             }
                         }
-                        if (entry.getName().contains("location")) {
+                        if (entryName.contains("location")) {
                             try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
                                 LocationContainer container = gson.fromJson(jsonReader, LocationContainer.class);
                                 logger.info("Load {} locations", container.locations.length);
                                 locationRepository.save(Arrays.asList(container.locations));
                             }
                         }
-                        if (entry.getName().contains("visit")) {
+                        if (entryName.contains("visit")) {
                             try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
                                 VisitContainer container = gson.fromJson(jsonReader, VisitContainer.class);
                                 logger.info("Load {} visits", container.visits.length);
@@ -85,6 +95,7 @@ public class Loader {
             }
         } else {
             Path path = Paths.get(this.path);
+            AtomicLong timestamp = new AtomicLong();
             try {
                 Files.list(path).forEach(new Consumer<Path>() {
                     @Override
@@ -93,6 +104,9 @@ public class Loader {
                             try (InputStream is = Files.newInputStream(path)) {
                                 String fileName = file.getName();
                                 logger.info("{}", file.getName());
+                                if (fileName.equals("options.txt")) {
+                                    timestamp.set(readTimestamp(is));
+                                }
                                 if (fileName.contains("users")) {
                                     try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
                                         UserContainer userContainer = gson.fromJson(jsonReader, UserContainer.class);
@@ -123,7 +137,23 @@ public class Loader {
             } catch (IOException e) {
                 throw new RuntimeException();
             }
+            this.timestamp = timestamp.get();
         }
+    }
+
+    private Long readTimestamp(@Nonnull InputStream is) throws IOException {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(is));) {
+            String timestamp = br.readLine();
+            try {
+                return Long.parseLong(timestamp);
+            } catch (NumberFormatException e) {
+                throw new RuntimeException();
+            }
+        }
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
     }
 
     public static class UserContainer{

@@ -1,21 +1,14 @@
 package io.github.volyx.ratpack.model;
 
-import javax.validation.constraints.Max;
-import javax.validation.constraints.Min;
-import javax.validation.constraints.Size;
 import java.io.Serializable;
 import java.util.Objects;
 
 public class Location implements Serializable {
-    public final Integer id;
-    public final String place;
-    @Max(value = 50, message = "country should not be greater than 50")
-    public final String country;
-    @Max(value = 50, message = "city should not be greater than 50")
-    public final String city;
-    @Min(value = 5, message = "distance should be gte 0")
-    @Max(value = 5, message = "distance should be lte 5")
-    public final Integer distance;
+    public Integer id;
+    public String place;
+    public String country;
+    public String city;
+    public Integer distance;
 
     public Location(Integer id, String place, String country, String city, Integer distance) {
         this.id = id;

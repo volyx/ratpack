@@ -4,11 +4,11 @@ import java.io.Serializable;
 import java.util.Objects;
 
 public class Visit implements Serializable {
-    public final Integer id;
-    public final Integer location;
-    public final Integer user;
-    public final Long visited_at;
-    public final Integer mark;
+    public Integer id;
+    public Integer location;
+    public Integer user;
+    public Long visited_at;
+    public Integer mark;
 
     Visit(Integer id, Integer location, Integer user, Long visited_at, Integer mark) {
         this.id = id;
