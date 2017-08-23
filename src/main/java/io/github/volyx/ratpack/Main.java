@@ -13,7 +13,6 @@ import io.github.volyx.ratpack.handler.VisitHandler;
 import io.github.volyx.ratpack.repository.LocationRepository;
 import io.github.volyx.ratpack.repository.UserRepository;
 import io.github.volyx.ratpack.repository.VisitRepository;
-import io.github.volyx.ratpack.storage.Storage;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.nustaq.serialization.FSTConfiguration;
@@ -21,6 +20,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Objects;
 
 public class Main {
@@ -36,16 +42,22 @@ public class Main {
         Config config = ConfigFactory.load(String.format("application%s.conf", (profile != null) ? "." + profile : ""));
         log.info("Profile {}", profile);
 
-        Storage storage = new Storage(config.getString("rocksdb"));
         int port = config.getInt("port");
         Gson gson = new Gson();
-        UserRepository userRepo = new UserRepository(storage);
-        LocationRepository locationRepo = new LocationRepository(storage);
-        VisitRepository visitRepo = new VisitRepository(storage, locationRepo);
+        UserRepository userRepo = new UserRepository();
+        LocationRepository locationRepo = new LocationRepository();
+        VisitRepository visitRepo = new VisitRepository(locationRepo);
+
+        System.out.println("Load options.txt");
+
+        try (InputStream is = Files.newInputStream(Paths.get(config.getString("options")));) {
+            timestamp = Objects.requireNonNull(readTimestamp(is));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
 
         Loader loader = new Loader(config, userRepo, locationRepo, visitRepo, gson);
         loader.load();
-        timestamp = Objects.requireNonNull(loader.getTimestamp());
 
         NettyHttpService service = NettyHttpService.builder("super")
                 .setPort(port)
@@ -76,6 +88,18 @@ public class Main {
         }
 
     }
+
+    private static Long readTimestamp(@Nonnull InputStream is) throws IOException {
+        try (BufferedReader br = new BufferedReader(new InputStreamReader(is));) {
+            String timestamp = br.readLine();
+            try {
+                return Long.parseLong(timestamp);
+            } catch (NumberFormatException e) {
+                throw new RuntimeException();
+            }
+        }
+    }
+
 
     public static class Exc {
         public String error;

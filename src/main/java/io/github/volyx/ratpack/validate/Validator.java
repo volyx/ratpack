@@ -1,7 +1,6 @@
 package io.github.volyx.ratpack.validate;
 
 import javax.annotation.Nonnull;
-import java.util.Set;
 
 public interface Validator<T> {
     default String validateJson(@Nonnull String json) {

@@ -73,7 +73,7 @@ public class UserHandler extends AbstractHttpHandler {
         try {
             id = Integer.parseInt(idParam);
         } catch (NumberFormatException e) {
-            responder.sendString(HttpResponseStatus.NOT_FOUND, "Not found " + idParam);
+            responder.sendString(HttpResponseStatus.NOT_FOUND, "Bad format id " + idParam);
             return;
         }
         @Nullable User user = userRepository.findById(id);
@@ -111,7 +111,7 @@ public class UserHandler extends AbstractHttpHandler {
         if (update.birth_date != null) {
             user.birth_date = update.birth_date;
         }
-        userRepository.update(user);
+        userRepository.save(user);
         responder.sendJson(HttpResponseStatus.OK, "{}");
     }
 

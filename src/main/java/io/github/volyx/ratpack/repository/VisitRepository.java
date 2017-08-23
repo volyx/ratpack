@@ -3,77 +3,48 @@ package io.github.volyx.ratpack.repository;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.Visit;
 import io.github.volyx.ratpack.model.VisitPlace;
-import io.github.volyx.ratpack.storage.Storage;
-import io.github.volyx.ratpack.storage.Type;
-import io.github.volyx.ratpack.utils.Utils;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-import static io.github.volyx.ratpack.Main.conf;
-
 public class VisitRepository {
+    private Map<Integer, Visit> visits = new ConcurrentHashMap<>(10000);
     @Nonnull
-    private final Storage storage;
-    private LocationRepository locationRepository;
-    private final Type type;
+    private final LocationRepository locationRepository;
 
-    public VisitRepository(@Nonnull Storage storage, @Nonnull LocationRepository locationRepository) {
-        this.storage = storage;
+    public VisitRepository(@Nonnull LocationRepository locationRepository) {
         this.locationRepository = locationRepository;
-        this.type = Type.visit;
     }
 
-    @Nonnull
-    public Visit save(@Nonnull Visit visit) {
-        storage.put(type, conf.asByteArray(visit.id), conf.asByteArray(visit));
-        return visit;
+
+    public void save(@Nonnull Visit visit) {
+        visits.put(visit.id, visit);
     }
 
     public void save(@Nonnull List<Visit> visits) {
-        Map<byte[], byte[]> batch = new HashMap<>(visits.size());
-        for (Visit v : visits) {
-            batch.put(conf.asByteArray(v.id), conf.asByteArray(v));
+        for (Visit visit : visits) {
+            save(visit);
         }
-        storage.bulk(type, batch);
     }
 
     @Nullable
     public Visit findById(@Nonnull Integer id) {
-        byte[] bytes = storage.get(Type.visit, conf.asByteArray(id));
-        if (bytes != null) {
-            return (Visit) conf.asObject(bytes);
-        }
-        return null;
+        return visits.get(id);
     }
 
-    @Nonnull
-    public Visit update(Visit visit) {
-        storage.put(type, conf.asByteArray(visit.id), conf.asByteArray(visit));
-        return visit;
-    }
-
-    public List<Visit> findAll() {
-        List<byte[]> all = storage.findAll(type);
-        List<Visit> visits = new ArrayList<>(all.size());
-        for (byte[] bytes : all) {
-            visits.add((Visit) conf.asObject(bytes));
-        }
-        return visits;
+    public Collection<Visit> findAll() {
+        return visits.values();
     }
 
     public List<VisitPlace> findVisits(@Nonnull Integer id, @Nonnull Long from, @Nonnull Long to, @Nullable String country, @Nullable Integer distance) {
-        final List<Visit> visits = findAll();
 
-        return visits.stream()
+        return findAll().stream()
                 .filter(v -> {
                     if (!v.user.equals(id)) {
                         return false;
@@ -101,7 +72,7 @@ public class VisitRepository {
                         }
                     }
 //                    System.out.println(v + ((location != null) ? location.toString() : ""));
-                   return true;
+                    return true;
                 })
                 .map(visit -> {
                     VisitPlace visitPlace = new VisitPlace();

@@ -4,6 +4,7 @@ import co.cask.http.AbstractHttpHandler;
 import co.cask.http.HttpResponder;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
+import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import io.github.volyx.ratpack.model.Gender;
 import io.github.volyx.ratpack.model.Location;
@@ -27,10 +28,14 @@ import javax.ws.rs.GET;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static io.github.volyx.ratpack.utils.Utils.getInteger;
+import static io.github.volyx.ratpack.utils.Utils.getLong;
 
 public class LocationHandler extends AbstractHttpHandler {
 
@@ -88,14 +93,27 @@ public class LocationHandler extends AbstractHttpHandler {
             responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
             return;
         }
-        location = gson.fromJson(body, Location.class);
-        violations = validator.validateUpdate(location);
+        Location update = gson.fromJson(body, Location.class);
+        violations = validator.validateUpdate(update);
         if (!violations.isEmpty()) {
             responder.sendString(HttpResponseStatus.NOT_FOUND, "Validation " + violations);
             return;
         }
         location.id = id;
-        responder.sendJson(HttpResponseStatus.OK, locationRepository.update(location));
+        if (!Strings.isNullOrEmpty(update.place )) {
+            location.place = update.place;
+        }
+        if (!Strings.isNullOrEmpty(update.country )) {
+            location.country = update.country;
+        }
+        if (!Strings.isNullOrEmpty(update.city )) {
+            location.city = update.city;
+        }
+        if (update.distance != null) {
+            location.distance = update.distance;
+        }
+        locationRepository.save(location);
+        responder.sendJson(HttpResponseStatus.OK, location);
     }
 
     @Path("/locations/new")
@@ -113,7 +131,8 @@ public class LocationHandler extends AbstractHttpHandler {
             responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
             return;
         }
-        responder.sendJson(HttpResponseStatus.OK, locationRepository.save(location));
+        locationRepository.save(location);
+        responder.sendJson(HttpResponseStatus.OK, location);
     }
 
     @Path("/locations/{id}/avg")
@@ -187,7 +206,7 @@ public class LocationHandler extends AbstractHttpHandler {
             gender = null;
         }
 
-        List<Visit> allVisits = visitRepository.findAll();
+        Collection<Visit> allVisits = visitRepository.findAll();
 
         Double avg = allVisits.stream().filter(v -> {
             if (!v.location.equals(id)) {
@@ -218,26 +237,6 @@ public class LocationHandler extends AbstractHttpHandler {
                 .collect(Collectors.averagingDouble(value -> (double) value.mark));
         Avg avgContainer = new Avg(avg);
         responder.sendJson(HttpResponseStatus.OK, avgContainer);
-    }
-
-    private Integer getInteger(String fromAgeParam, Integer defaultValue) {
-        @Nullable final Integer fromAge;
-        if (fromAgeParam != null) {
-            fromAge = Utils.getIntegerOrDefault(fromAgeParam, null);
-        } else {
-            fromAge = defaultValue;
-        }
-        return fromAge;
-    }
-
-    private Long getLong(String fromDate, Long defaultValue) {
-        final Long from;
-        if (fromDate != null) {
-            from = Utils.getLongOrDefault(fromDate, null);
-        } else {
-            from = defaultValue;
-        }
-        return from;
     }
 
     public class Avg {

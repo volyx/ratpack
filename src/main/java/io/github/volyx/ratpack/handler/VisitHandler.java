@@ -9,8 +9,6 @@ import io.github.volyx.ratpack.repository.VisitRepository;
 import io.github.volyx.ratpack.validate.VisitValidator;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -22,7 +20,6 @@ import javax.ws.rs.PathParam;
 
 public class VisitHandler extends AbstractHttpHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(UserHandler.class);
     private final VisitRepository visitRepository;
     private final Gson gson;
     private final VisitValidator validator = new VisitValidator();
@@ -58,7 +55,7 @@ public class VisitHandler extends AbstractHttpHandler {
         try {
             id = Integer.parseInt(idParam);
         } catch (NumberFormatException e) {
-            responder.sendString(HttpResponseStatus.NOT_FOUND, "Not found " + idParam);
+            responder.sendString(HttpResponseStatus.NOT_FOUND, "Bad format " + idParam);
             return;
         }
         @Nullable Visit visit = visitRepository.findById(id);
@@ -94,7 +91,7 @@ public class VisitHandler extends AbstractHttpHandler {
         if (update.visited_at != null) {
             visit.visited_at = update.visited_at;
         }
-        visitRepository.update(visit);
+        visitRepository.save(visit);
         responder.sendJson(HttpResponseStatus.OK, "{}");
     }
 
@@ -112,10 +109,6 @@ public class VisitHandler extends AbstractHttpHandler {
         violations = validator.validateNew(visit);
         if (!violations.isEmpty()) {
             responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
-            return;
-        }
-        if (visit.id == null) {
-            responder.sendString(HttpResponseStatus.BAD_REQUEST, "Visit id is empty");
             return;
         }
         visitRepository.save(visit);

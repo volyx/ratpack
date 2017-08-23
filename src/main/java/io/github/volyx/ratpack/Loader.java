@@ -43,7 +43,6 @@ public class Loader {
     @Nonnull
     private final Gson gson;
     @Nonnull
-    private Long timestamp;
 
     public Loader(@Nonnull Config config, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository, @Nonnull Gson gson) {
         this.path = config.getString("load.path");
@@ -63,10 +62,7 @@ public class Loader {
                     ZipEntry entry = entries.nextElement();
                     try (InputStream is = file.getInputStream(entry)) {
                         String entryName = entry.getName();
-                        logger.info("{}", entryName);
-                        if (entryName.equals("options.txt")) {
-                            this.timestamp = this.readTimestamp(is);
-                        }
+
                         if (entryName.contains("users")) {
                             try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
                                 UserContainer userContainer = gson.fromJson(jsonReader, UserContainer.class);
@@ -103,10 +99,6 @@ public class Loader {
                             File file = path.toFile();
                             try (InputStream is = Files.newInputStream(path)) {
                                 String fileName = file.getName();
-                                logger.info("{}", file.getName());
-                                if (fileName.equals("options.txt")) {
-                                    timestamp.set(readTimestamp(is));
-                                }
                                 if (fileName.contains("users")) {
                                     try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
                                         UserContainer userContainer = gson.fromJson(jsonReader, UserContainer.class);
@@ -137,25 +129,8 @@ public class Loader {
             } catch (IOException e) {
                 throw new RuntimeException();
             }
-            this.timestamp = timestamp.get();
         }
     }
-
-    private Long readTimestamp(@Nonnull InputStream is) throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(is));) {
-            String timestamp = br.readLine();
-            try {
-                return Long.parseLong(timestamp);
-            } catch (NumberFormatException e) {
-                throw new RuntimeException();
-            }
-        }
-    }
-
-    public Long getTimestamp() {
-        return timestamp;
-    }
-
     public static class UserContainer{
         private UserContainer(){}
         public User[] users;

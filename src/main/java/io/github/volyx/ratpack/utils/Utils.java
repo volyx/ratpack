@@ -12,6 +12,26 @@ import java.time.ZoneOffset;
 
 public class Utils {
 
+    public static Integer getInteger(String fromAgeParam, Integer defaultValue) {
+        @Nullable final Integer fromAge;
+        if (fromAgeParam != null) {
+            fromAge = Utils.getIntegerOrDefault(fromAgeParam, null);
+        } else {
+            fromAge = defaultValue;
+        }
+        return fromAge;
+    }
+
+    public static Long getLong(String fromDate, Long defaultValue) {
+        final Long from;
+        if (fromDate != null) {
+            from = Utils.getLongOrDefault(fromDate, null);
+        } else {
+            from = defaultValue;
+        }
+        return from;
+    }
+
     public static Integer getIntegerOrDefault(@Nullable String value, @Nullable Integer defaultValue) {
         Integer result = defaultValue;
         try {
