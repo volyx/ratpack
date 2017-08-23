@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static io.github.volyx.ratpack.handler.UserHandler.OBJECT;
 import static io.github.volyx.ratpack.utils.Utils.getInteger;
 import static io.github.volyx.ratpack.utils.Utils.getLong;
 
@@ -113,7 +114,7 @@ public class LocationHandler extends AbstractHttpHandler {
             location.distance = update.distance;
         }
         locationRepository.save(location);
-        responder.sendJson(HttpResponseStatus.OK, location);
+        responder.sendJson(HttpResponseStatus.OK, OBJECT);
     }
 
     @Path("/locations/new")
@@ -132,7 +133,7 @@ public class LocationHandler extends AbstractHttpHandler {
             return;
         }
         locationRepository.save(location);
-        responder.sendJson(HttpResponseStatus.OK, location);
+        responder.sendJson(HttpResponseStatus.OK, OBJECT);
     }
 
     @Path("/locations/{id}/avg")

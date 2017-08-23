@@ -17,6 +17,8 @@ import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 
+import static io.github.volyx.ratpack.handler.UserHandler.OBJECT;
+
 
 public class VisitHandler extends AbstractHttpHandler {
 
@@ -92,7 +94,7 @@ public class VisitHandler extends AbstractHttpHandler {
             visit.visited_at = update.visited_at;
         }
         visitRepository.save(visit);
-        responder.sendJson(HttpResponseStatus.OK, "{}");
+        responder.sendJson(HttpResponseStatus.OK, OBJECT);
     }
 
 
@@ -112,6 +114,6 @@ public class VisitHandler extends AbstractHttpHandler {
             return;
         }
         visitRepository.save(visit);
-        responder.sendJson(HttpResponseStatus.OK, "{}");
+        responder.sendJson(HttpResponseStatus.OK, OBJECT);
     }
 }

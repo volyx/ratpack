@@ -7,7 +7,6 @@ import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.gson.Gson;
 import io.github.volyx.ratpack.model.User;
-import io.github.volyx.ratpack.model.Visit;
 import io.github.volyx.ratpack.model.VisitPlace;
 import io.github.volyx.ratpack.repository.UserRepository;
 import io.github.volyx.ratpack.repository.VisitRepository;
@@ -17,8 +16,6 @@ import io.mola.galimatias.GalimatiasParseException;
 import io.mola.galimatias.URL;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -28,19 +25,16 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-import java.util.function.Consumer;
 
 public class UserHandler extends AbstractHttpHandler {
-    private static final Logger logger = LoggerFactory.getLogger(UserHandler.class);
     private final UserRepository userRepository;
     private final VisitRepository visitRepository;
     private final UserValidator validator = new UserValidator();
     private final Gson gson;
+    public static final Object OBJECT = new Object();
 
     public UserHandler(@Nonnull UserRepository userRepository, @Nonnull VisitRepository visitRepository, @Nonnull Gson gson) {
         this.userRepository = userRepository;
@@ -111,8 +105,11 @@ public class UserHandler extends AbstractHttpHandler {
         if (update.birth_date != null) {
             user.birth_date = update.birth_date;
         }
+        if (update.gender != null) {
+            user.gender = update.gender;
+        }
         userRepository.save(user);
-        responder.sendJson(HttpResponseStatus.OK, "{}");
+        responder.sendJson(HttpResponseStatus.OK, OBJECT);
     }
 
     @Path("/users/new")
@@ -135,7 +132,7 @@ public class UserHandler extends AbstractHttpHandler {
             return;
         }
         userRepository.save(user);
-        responder.sendJson(HttpResponseStatus.OK, "{}");
+        responder.sendJson(HttpResponseStatus.OK, OBJECT);
     }
 
     /**
