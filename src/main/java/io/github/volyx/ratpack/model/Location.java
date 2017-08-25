@@ -1,5 +1,7 @@
 package io.github.volyx.ratpack.model;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -24,6 +26,11 @@ public class Location implements Serializable {
         this.country = null;
         this.city = null;
         this.distance = null;
+    }
+
+    private static final TypeReference<Location> typeRef = new TypeReference<Location>() {};
+    public static TypeReference<Location> typeRef() {
+        return typeRef;
     }
 
     @Override

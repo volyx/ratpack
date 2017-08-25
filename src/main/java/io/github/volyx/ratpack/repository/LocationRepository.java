@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class LocationRepository {
-    private Map<Integer, Location> locations = new ConcurrentHashMap<>(10000);
+    private Map<Integer, Location> locations = new ConcurrentHashMap<>(1000000);
     public void save(@Nonnull Location location) {
         locations.put(location.id, location);
     }

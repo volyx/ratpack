@@ -1,119 +1,96 @@
 package io.github.volyx.ratpack.handler;
 
-import co.cask.http.AbstractHttpHandler;
-import co.cask.http.HttpResponder;
-import com.google.common.base.Charsets;
-import com.google.gson.Gson;
 import io.github.volyx.ratpack.model.Visit;
 import io.github.volyx.ratpack.repository.VisitRepository;
 import io.github.volyx.ratpack.validate.VisitValidator;
-import org.jboss.netty.handler.codec.http.HttpRequest;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.util.PathTemplateMatch;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import javax.ws.rs.GET;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-
-import static io.github.volyx.ratpack.handler.UserHandler.OBJECT;
 
 
-public class VisitHandler extends AbstractHttpHandler {
+public class VisitHandler {
 
     private final VisitRepository visitRepository;
-    private final Gson gson;
     private final VisitValidator validator = new VisitValidator();
 
-    public VisitHandler(@Nonnull VisitRepository visitRepository, @Nonnull Gson gson) {
+    public VisitHandler(@Nonnull VisitRepository visitRepository) {
         this.visitRepository = visitRepository;
-        this.gson = gson;
     }
 
-    @Path("/visits/{id}")
-    @GET
-    public void get(HttpRequest request, HttpResponder responder, @PathParam("id") String idParam) {
+
+    public void get(@Nonnull HttpServerExchange exchange) {
+        PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+        String idParam = pathMatch.getParameters().get("id");
         Integer id;
         try {
             id = Integer.parseInt(idParam);
         } catch (NumberFormatException e) {
-            responder.sendString(HttpResponseStatus.NOT_FOUND, "Not found " + idParam);
+            Exchange.error().notFound(exchange, "Not found " + idParam);
             return;
         }
-
         @Nullable Visit visit = visitRepository.findById(id);
         if (visit == null) {
-            responder.sendString(HttpResponseStatus.NOT_FOUND, "Not found " + idParam);
+            Exchange.error().notFound(exchange, "Not found visit by" + idParam);
             return;
         }
-        responder.sendJson(HttpResponseStatus.OK, visit);
+        Exchange.body().sendJson(exchange, visit);
     }
 
-    @Path("/visits/{id}")
-    @POST
-    public void update(HttpRequest request, HttpResponder responder, @PathParam("id") String idParam) {
+    public void update(HttpServerExchange exchange) {
+        PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+        String idParam = pathMatch.getParameters().get("id");
         Integer id;
         try {
             id = Integer.parseInt(idParam);
         } catch (NumberFormatException e) {
-            responder.sendString(HttpResponseStatus.NOT_FOUND, "Bad format " + idParam);
+            Exchange.error().notFound(exchange, "Bad format " + idParam);
             return;
         }
         @Nullable Visit visit = visitRepository.findById(id);
         if (visit == null) {
-            responder.sendString(HttpResponseStatus.NOT_FOUND, "Not found " + idParam);
+            Exchange.error().notFound(exchange, "Not found " + idParam);
             return;
         }
 
-        String body = request.getContent().toString(Charsets.UTF_8);
-        String violations = validator.validateJson(body);
-        if (!violations.isEmpty()) {
-            responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
+        Visit update = Exchange.body().parseJson(exchange, Visit.typeRef());
+        if (update == null) {
+            Exchange.error().badRequest(exchange, "Update is null " + visit.id);
             return;
         }
-        Visit update = gson.fromJson(body, Visit.class);
-        violations = validator.validateUpdate(update);
+        String violations = validator.validateUpdate(update);
         if (!violations.isEmpty()) {
-            responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
+            Exchange.error().badRequest(exchange, "Validation " + violations);
             return;
         }
         if (update.location != null) {
+            visitRepository.saveLocationToVisit(visit);
             visit.location = update.location;
         }
         if (update.mark != null) {
             visit.mark = update.mark;
         }
         if (update.user != null) {
+            visitRepository.saveUserToVisit(visit);
             visit.user = update.user;
         }
         if (update.visited_at != null) {
-            visit.visited_at = update.visited_at;
-        }
-        if (update.visited_at != null) {
+            visitRepository.saveVisitAt(visit);
             visit.visited_at = update.visited_at;
         }
         visitRepository.save(visit);
-        responder.sendJson(HttpResponseStatus.OK, OBJECT);
+        Exchange.body().sendEmptyJson(exchange);
     }
 
-
-    @Path("/visits/new")
-    @POST
-    public void create(HttpRequest request, HttpResponder responder) {
-        String body = request.getContent().toString(Charsets.UTF_8);
-        String violations = validator.validateJson(body);
+    public void create(HttpServerExchange exchange) {
+        Visit visit = Exchange.body().parseJson(exchange, Visit.typeRef());
+        String violations = validator.validateNew(visit);
         if (!violations.isEmpty()) {
-            responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
-            return;
-        }
-        Visit visit = gson.fromJson(body, Visit.class);
-        violations = validator.validateNew(visit);
-        if (!violations.isEmpty()) {
-            responder.sendString(HttpResponseStatus.BAD_REQUEST, "Validation " + violations);
+            Exchange.error().badRequest(exchange, "Validation " + violations);
             return;
         }
         visitRepository.save(visit);
-        responder.sendJson(HttpResponseStatus.OK, OBJECT);
+        Exchange.body().sendEmptyJson(exchange);
     }
 }

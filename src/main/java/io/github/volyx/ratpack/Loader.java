@@ -1,8 +1,8 @@
 package io.github.volyx.ratpack;
 
-import com.google.gson.Gson;
-import com.google.gson.stream.JsonReader;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.typesafe.config.Config;
+import io.github.volyx.ratpack.handler.Json;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
@@ -13,19 +13,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
-import java.nio.channels.MulticastChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Enumeration;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -40,16 +36,12 @@ public class Loader {
     private final LocationRepository locationRepository;
     @Nonnull
     private final VisitRepository visitRepository;
-    @Nonnull
-    private final Gson gson;
-    @Nonnull
 
-    public Loader(@Nonnull Config config, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository, @Nonnull Gson gson) {
+    public Loader(@Nonnull Config config, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository) {
         this.path = config.getString("load.path");
         this.userRepository = userRepository;
         this.locationRepository = locationRepository;
         this.visitRepository = visitRepository;
-        this.gson = gson;
     }
 
     void load() {
@@ -64,25 +56,20 @@ public class Loader {
                         String entryName = entry.getName();
 
                         if (entryName.contains("users")) {
-                            try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
-                                UserContainer userContainer = gson.fromJson(jsonReader, UserContainer.class);
-                                logger.info("Load {} users", userContainer.users.length);
-                                userRepository.save(Arrays.asList(userContainer.users));
-                            }
+                            UserContainer userContainer = Json.serializer().fromInputStream(is, UserContainer.typeRef());
+                            logger.info("Load {} users", userContainer.users.length);
+                            userRepository.save(Arrays.asList(userContainer.users));
+
                         }
                         if (entryName.contains("location")) {
-                            try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
-                                LocationContainer container = gson.fromJson(jsonReader, LocationContainer.class);
-                                logger.info("Load {} locations", container.locations.length);
-                                locationRepository.save(Arrays.asList(container.locations));
-                            }
+                            LocationContainer container = Json.serializer().fromInputStream(is, LocationContainer.typeRef());
+                            logger.info("Load {} locations", container.locations.length);
+                            locationRepository.save(Arrays.asList(container.locations));
                         }
                         if (entryName.contains("visit")) {
-                            try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
-                                VisitContainer container = gson.fromJson(jsonReader, VisitContainer.class);
-                                logger.info("Load {} visits", container.visits.length);
-                                visitRepository.save(Arrays.asList(container.visits));
-                            }
+                            VisitContainer container = Json.serializer().fromInputStream(is, VisitContainer.typeRef());
+                            logger.info("Load {} visits", container.visits.length);
+                            visitRepository.save(Arrays.asList(container.visits));
                         }
                     }
                 }
@@ -91,38 +78,31 @@ public class Loader {
             }
         } else {
             Path path = Paths.get(this.path);
-            AtomicLong timestamp = new AtomicLong();
             try {
                 Files.list(path).forEach(new Consumer<Path>() {
                     @Override
                     public void accept(Path path) {
-                            File file = path.toFile();
-                            try (InputStream is = Files.newInputStream(path)) {
-                                String fileName = file.getName();
-                                if (fileName.contains("users")) {
-                                    try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
-                                        UserContainer userContainer = gson.fromJson(jsonReader, UserContainer.class);
-                                        logger.info("Load {} users", userContainer.users.length);
-                                        userRepository.save(Arrays.asList(userContainer.users));
-                                    }
-                                }
-                                if (fileName.contains("location")) {
-                                    try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
-                                        LocationContainer container = gson.fromJson(jsonReader, LocationContainer.class);
-                                        logger.info("Load {} locations", container.locations.length);
-                                        locationRepository.save(Arrays.asList(container.locations));
-                                    }
-                                }
-                                if (fileName.contains("visit")) {
-                                    try (JsonReader jsonReader = new JsonReader(new InputStreamReader(is))) {
-                                        VisitContainer container = gson.fromJson(jsonReader, VisitContainer.class);
-                                        logger.info("Load {} visits", container.visits.length);
-                                        visitRepository.save(Arrays.asList(container.visits));
-                                    }
-                                }
-                            } catch (IOException e) {
-                                throw new RuntimeException();
+                        File file = path.toFile();
+                        try (InputStream is = Files.newInputStream(path)) {
+                            String fileName = file.getName();
+                            if (fileName.contains("users")) {
+                                UserContainer userContainer = Json.serializer().fromInputStream(is, UserContainer.typeRef());
+                                logger.info("Load {} users", userContainer.users.length);
+                                userRepository.save(Arrays.asList(userContainer.users));
                             }
+                            if (fileName.contains("location")) {
+                                LocationContainer container = Json.serializer().fromInputStream(is, LocationContainer.typeRef());
+                                logger.info("Load {} locations", container.locations.length);
+                                locationRepository.save(Arrays.asList(container.locations));
+                            }
+                            if (fileName.contains("visit")) {
+                                VisitContainer container = Json.serializer().fromInputStream(is, VisitContainer.typeRef());
+                                logger.info("Load {} visits", container.visits.length);
+                                visitRepository.save(Arrays.asList(container.visits));
+                            }
+                        } catch (IOException e) {
+                            throw new RuntimeException();
+                        }
 
                     }
                 });
@@ -131,17 +111,43 @@ public class Loader {
             }
         }
     }
-    public static class UserContainer{
-        private UserContainer(){}
+
+    public static class UserContainer {
+        private UserContainer() {
+        }
+
         public User[] users;
+        private static final TypeReference<UserContainer> typeRef = new TypeReference<UserContainer>() {
+        };
+
+        public static TypeReference<UserContainer> typeRef() {
+            return typeRef;
+        }
     }
 
-    public static class LocationContainer{
-        private LocationContainer(){}
+    public static class LocationContainer {
+        private LocationContainer() {
+        }
+
         public Location[] locations;
+
+        private static final TypeReference<LocationContainer> typeRef = new TypeReference<LocationContainer>() {};
+
+        public static TypeReference<LocationContainer> typeRef() {
+            return typeRef;
+        }
     }
-    public static class VisitContainer{
-        private VisitContainer(){}
+
+    public static class VisitContainer {
+        private VisitContainer() {
+        }
+
         public Visit[] visits;
+        private static final TypeReference<VisitContainer> typeRef = new TypeReference<VisitContainer>() {
+        };
+
+        public static TypeReference<VisitContainer> typeRef() {
+            return typeRef;
+        }
     }
 }

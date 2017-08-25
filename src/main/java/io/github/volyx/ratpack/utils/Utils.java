@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 
 public class Utils {
 
+    @Nullable
     public static Integer getInteger(String fromAgeParam, Integer defaultValue) {
         @Nullable final Integer fromAge;
         if (fromAgeParam != null) {
@@ -22,7 +23,11 @@ public class Utils {
         return fromAge;
     }
 
-    public static Long getLong(String fromDate, Long defaultValue) {
+    public static boolean isNullOrEmpty(String value) {
+        return value == null || value.isEmpty();
+    }
+    @Nullable
+    public static Long getLong(@Nullable String fromDate, @Nullable Long defaultValue) {
         final Long from;
         if (fromDate != null) {
             from = Utils.getLongOrDefault(fromDate, null);
@@ -67,8 +72,24 @@ public class Utils {
     }
 
     public static Integer getAge(@Nonnull Long birth_date) {
-        LocalDate birthDayDate = LocalDateTime.ofEpochSecond(birth_date, 0, ZoneOffset.UTC).toLocalDate();
-        LocalDate currentDate = LocalDateTime.ofEpochSecond(Main.timestamp, 0, ZoneOffset.UTC).toLocalDate();
-        return Period.between(birthDayDate, currentDate).getYears();
+//        LocalDate birthDayDate = LocalDateTime.ofEpochSecond(birth_date, 0, ZoneOffset.UTC).toLocalDate();
+//        LocalDate currentDate = LocalDateTime.ofEpochSecond(Main.timestamp, 0, ZoneOffset.UTC).toLocalDate();
+//        // System.out.println("birthDayDate = " + birthDayDate);
+//        // System.out.println("currentDate = " + currentDate);
+//        return Period.between(birthDayDate, currentDate).getYears();
+//        long timeBetween = Main.timestamp - birth_date;
+//        double yearsBetween = timeBetween / 3.156e+10;
+//        return  (int) Math.floor(yearsBetween);
+        return (int) ((Main.timestamp - birth_date) / 60 / 60 / 24 / 365.25);
+    }
+
+    public static void main(String[] args) {
+        LocalDate a = LocalDate.of(2015, 2, 2);
+        LocalDate b = LocalDate.of(2016, 2, 2);
+        // System.out.println(Period.between(a, b).toTotalMonths());
+    }
+
+    public static boolean isStringNull(String value) {
+        return value.equals("null");
     }
 }

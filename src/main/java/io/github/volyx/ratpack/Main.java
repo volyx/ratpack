@@ -1,25 +1,23 @@
 package io.github.volyx.ratpack;
 
-import co.cask.http.ExceptionHandler;
-import co.cask.http.HttpResponder;
-import co.cask.http.NettyHttpService;
-import com.google.common.collect.ImmutableList;
-import com.google.gson.Gson;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import io.github.volyx.ratpack.handler.ErrorHandler;
+import io.github.volyx.ratpack.handler.GetHttpHandler;
+import io.github.volyx.ratpack.handler.GetPostHttpHandler;
 import io.github.volyx.ratpack.handler.LocationHandler;
+import io.github.volyx.ratpack.handler.PostHttpHandler;
 import io.github.volyx.ratpack.handler.UserHandler;
 import io.github.volyx.ratpack.handler.VisitHandler;
 import io.github.volyx.ratpack.repository.LocationRepository;
 import io.github.volyx.ratpack.repository.UserRepository;
 import io.github.volyx.ratpack.repository.VisitRepository;
-import org.jboss.netty.handler.codec.http.HttpRequest;
-import org.jboss.netty.handler.codec.http.HttpResponseStatus;
-import org.nustaq.serialization.FSTConfiguration;
+import io.undertow.Handlers;
+import io.undertow.Undertow;
+import io.undertow.server.HttpHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,8 +30,6 @@ import java.util.Objects;
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
-    public static FSTConfiguration conf = FSTConfiguration.createMinBinConfiguration();
-    @Nonnull
     public static Long timestamp;
 
     public static void main(String[] args) {
@@ -43,65 +39,58 @@ public class Main {
         log.info("Profile {}", profile);
 
         int port = config.getInt("port");
-        Gson gson = new Gson();
         UserRepository userRepo = new UserRepository();
         LocationRepository locationRepo = new LocationRepository();
         VisitRepository visitRepo = new VisitRepository(locationRepo);
-
-        System.out.println("Load options.txt");
+        UserHandler userHandler = new UserHandler(userRepo, visitRepo);
+        VisitHandler visitHandler = new VisitHandler(visitRepo);
+        LocationHandler locationHandler = new LocationHandler(locationRepo, visitRepo, userRepo);
+        log.info("Load options.txt");
 
         try (InputStream is = Files.newInputStream(Paths.get(config.getString("options")));) {
-            timestamp = Objects.requireNonNull(readTimestamp(is));
+            Long result;
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(is));) {
+                String timestamp1 = br.readLine();
+                try {
+                    result = Long.parseLong(timestamp1);
+                } catch (NumberFormatException e) {
+                    throw new RuntimeException();
+                }
+            }
+            timestamp = Objects.requireNonNull(result);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
 
-        Loader loader = new Loader(config, userRepo, locationRepo, visitRepo, gson);
+        Loader loader = new Loader(config, userRepo, locationRepo, visitRepo);
         loader.load();
 
-        NettyHttpService service = NettyHttpService.builder("super")
-                .setPort(port)
-                .setHost("0.0.0.0")
-                .addHttpHandlers(ImmutableList.of(
-                        new UserHandler(userRepo, visitRepo, gson),
-                        new LocationHandler(locationRepo, visitRepo, userRepo, gson),
-                        new VisitHandler(visitRepo, gson)
-                ))
-                .setExceptionHandler(new ExceptionHandler() {
+        Undertow server = Undertow.builder()
+                .addHttpListener(port, "0.0.0.0")
+                .setHandler(Handlers
+                        .pathTemplate()
+                        .add("/users/{id}", errorHandler(new GetPostHttpHandler(userHandler::get, userHandler::update)))
+                        .add("/users/new", errorHandler( new PostHttpHandler(userHandler::create)))
+                        .add("/users/{id}/visits", errorHandler( new GetHttpHandler(userHandler::getVisits)))
 
-                    @Override
-                    public void handle(Throwable t, HttpRequest request, HttpResponder responder) {
-                        Exc exc = new Exc();
-                        exc.error = t.getMessage();
-                        log.error(t.getMessage(), t);
-                        responder.sendJson(HttpResponseStatus.BAD_REQUEST, gson.toJson(exc));
-                    }
-                })
+                        .add("/visits/{id}", errorHandler(new GetPostHttpHandler(visitHandler::get, visitHandler::update)))
+                        .add("/visits/new", errorHandler(new PostHttpHandler(visitHandler::create)))
+
+                        .add("/locations/{id}", errorHandler(new GetPostHttpHandler(locationHandler::get, locationHandler::update)))
+                        .add("/locations/new", errorHandler(new PostHttpHandler(locationHandler::create)))
+                        .add("/locations/{id}/avg", errorHandler(new GetHttpHandler(locationHandler::avg)))
+                )
                 .build();
-
-       service.startAndWait();
+        server.start();
 
         try {
             Thread.currentThread().join();
         } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
-
-    }
-
-    private static Long readTimestamp(@Nonnull InputStream is) throws IOException {
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(is));) {
-            String timestamp = br.readLine();
-            try {
-                return Long.parseLong(timestamp);
-            } catch (NumberFormatException e) {
-                throw new RuntimeException();
-            }
+           throw new RuntimeException();
         }
     }
 
-
-    public static class Exc {
-        public String error;
+    public static HttpHandler errorHandler(HttpHandler handler) {
+        return new ErrorHandler(handler);
     }
 }

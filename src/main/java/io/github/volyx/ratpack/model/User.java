@@ -1,5 +1,8 @@
 package io.github.volyx.ratpack.model;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -62,5 +65,10 @@ public class User implements Serializable {
     @Override
     public int hashCode() {
         return Objects.hash(id);
+    }
+
+    private static final TypeReference<User> typeRef = new TypeReference<User>() {};
+    public static TypeReference<User> typeRef() {
+        return typeRef;
     }
 }
