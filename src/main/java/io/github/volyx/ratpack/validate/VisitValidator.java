@@ -1,53 +1,29 @@
 package io.github.volyx.ratpack.validate;
 
+import io.github.volyx.ratpack.exception.ValidationException;
 import io.github.volyx.ratpack.model.Visit;
 
-import javax.annotation.Nonnull;
-
 public class VisitValidator implements Validator<Visit> {
-    @Nonnull
     @Override
-    public String validateUpdate(Visit visit) {
+    public void validateNew(Visit visit) {
         if (visit == null) {
-            return "visit is null";
-        }
-
-        if (visit.mark != null && visit.mark < 0) {
-            return "mark ls 0";
-        }
-        if (visit.mark != null && visit.mark > 5) {
-            return "mark gt 5";
-        }
-        return "";
-    }
-
-    @Nonnull
-    @Override
-    public String validateNew(Visit visit) {
-        if (visit == null) {
-            return "visit is null";
+            throw new ValidationException("visit is null");
         }
         if (visit.id == null) {
-            return "null id";
+            throw new ValidationException("null id");
         }
         if (visit.location == null) {
-            return "null location";
+            throw new ValidationException("null location");
         }
         if (visit.user == null) {
-            return "null user";
+            throw new ValidationException("null user");
         }
         if (visit.visited_at == null) {
-            return "null visited_at";
+            throw new ValidationException("null visited_at");
         }
         if (visit.mark == null) {
-            return "null mark";
+            throw new ValidationException("null mark");
         }
-        if (visit.mark < 0) {
-            return "mark ls 0";
-        }
-        if (visit.mark > 5) {
-            return "mark gt 5";
-        }
-        return "";
+        validateMark(visit.mark);
     }
 }

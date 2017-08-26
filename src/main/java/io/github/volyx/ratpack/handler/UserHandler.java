@@ -5,6 +5,7 @@ import io.github.volyx.ratpack.model.VisitList;
 import io.github.volyx.ratpack.model.VisitPlace;
 import io.github.volyx.ratpack.repository.UserRepository;
 import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.update.UserUpdate;
 import io.github.volyx.ratpack.utils.Utils;
 import io.github.volyx.ratpack.validate.UserValidator;
 import io.undertow.server.HttpServerExchange;
@@ -59,21 +60,12 @@ public class UserHandler {
             return;
         }
 
-       User update = Exchange.body().parseJson(exchange, User.typeRef());
+       UserUpdate update = Exchange.body().parseJson(exchange, UserUpdate.class);
         if (update == null) {
             Exchange.error().badRequest(exchange, "Update is null " + user.id);
             return;
         }
-        if (update.id != null) {
-            Exchange.error().badRequest(exchange, "Id should not exist " + user.id);
-            return;
-        }
 
-        String violations = validator.validateUpdate(update);
-        if (!violations.isEmpty()) {
-            Exchange.error().badRequest(exchange, "Validation " + violations);
-            return;
-        }
         if (!Utils.isNullOrEmpty(update.last_name)) {
             user.last_name = update.last_name;
         }
@@ -94,16 +86,8 @@ public class UserHandler {
     }
 
     public void create(@Nonnull HttpServerExchange exchange) {
-        User user = Exchange.body().parseJson(exchange, User.typeRef());
-        String violations = validator.validateNew(user);
-        if (!violations.isEmpty()) {
-            Exchange.error().badRequest(exchange, "Validation " + violations);
-            return;
-        }
-        if (user.id == null) {
-            Exchange.error().badRequest(exchange, "User id is empty");
-            return;
-        }
+        User user = Exchange.body().parseJson(exchange, User.class);
+        validator.validateNew(user);
         userRepository.save(user);
         Exchange.body().sendEmptyJson(exchange);
     }

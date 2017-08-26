@@ -1,15 +1,20 @@
 package io.github.volyx.ratpack.model;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.jsoniter.annotation.JsonProperty;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-public class Visit implements Serializable {
+public class Visit {
+    @JsonProperty(required = true)
     public Integer id;
+    @JsonProperty(required = true)
     public Integer location;
+    @JsonProperty(required = true)
     public Integer user;
+    @JsonProperty(required = true)
     public Long visited_at;
+    @JsonProperty(required = true)
     public Integer mark;
 
     Visit(Integer id, Integer location, Integer user, Long visited_at, Integer mark) {
@@ -39,12 +44,6 @@ public class Visit implements Serializable {
     @Override
     public int hashCode() {
         return Objects.hash(id);
-    }
-
-
-    private static final TypeReference<Visit> typeRef = new TypeReference<Visit>() {};
-    public static TypeReference<Visit> typeRef() {
-        return typeRef;
     }
 
     @Override

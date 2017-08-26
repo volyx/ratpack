@@ -18,9 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 
 public class VisitRepository {
-    private final Map<Integer, Visit> visits = new ConcurrentHashMap<>(100000);
-    private final Map<Integer, Set<Integer>> userToVisits = new ConcurrentHashMap<>(10000);
-    private final Map<Integer, Set<Integer>> locationToVisits = new ConcurrentHashMap<>(10000);
+    private final Map<Integer, Visit> visits = new ConcurrentHashMap<>(1000000);
+    private final Map<Integer, Set<Integer>> userToVisits = new ConcurrentHashMap<>(1000000);
+    private final Map<Integer, Set<Integer>> locationToVisits = new ConcurrentHashMap<>(1000000);
 //    private final ConcurrentNavigableMap<Long, Integer> timeToVisit = new ConcurrentSkipListMap<>();
     @Nonnull
     private final LocationRepository locationRepository;
@@ -72,7 +72,7 @@ public class VisitRepository {
         };
     }
 
-    public void save(@Nonnull List<Visit> visits) {
+    public void save(@Nonnull Visit[] visits) {
         for (Visit visit : visits) {
             save(visit);
         }

@@ -1,30 +1,6 @@
 package io.github.volyx.ratpack;
 
-import io.github.volyx.ratpack.model.Location;
-import io.github.volyx.ratpack.model.User;
-import io.github.volyx.ratpack.model.Visit;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import org.junit.Assert;
-import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.UncheckedIOException;
-import java.net.URL;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 
 public class TestMain {
 //    private static final Logger logger = LoggerFactory.getLogger(TestMain.class);

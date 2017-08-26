@@ -1,4 +1,4 @@
-package io.github.volyx.ratpack.json;
+package io.github.volyx.ratpack.exception;
 
 public class ValidationException extends RuntimeException {
     public ValidationException() {

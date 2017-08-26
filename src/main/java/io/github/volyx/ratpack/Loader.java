@@ -1,8 +1,7 @@
 package io.github.volyx.ratpack;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.jsoniter.JsonIterator;
 import com.typesafe.config.Config;
-import io.github.volyx.ratpack.handler.Json;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
@@ -20,9 +19,14 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Enumeration;
-import java.util.function.Consumer;
+import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -36,6 +40,8 @@ public class Loader {
     private final LocationRepository locationRepository;
     @Nonnull
     private final VisitRepository visitRepository;
+    @Nonnull
+    private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
 
     public Loader(@Nonnull Config config, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository) {
         this.path = config.getString("load.path");
@@ -46,32 +52,23 @@ public class Loader {
 
     void load() {
         logger.info("Begin load {}", path);
+        List<Future<Integer>> futureList = new ArrayList<>();
         if (path.endsWith(".zip")) {
             try (ZipFile file = new ZipFile(Paths.get(path).toFile())) {
                 Enumeration<? extends ZipEntry> entries = file.entries();
-
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
-                    try (InputStream is = file.getInputStream(entry)) {
-                        String entryName = entry.getName();
-
-                        if (entryName.contains("users")) {
-                            UserContainer userContainer = Json.serializer().fromInputStream(is, UserContainer.typeRef());
-                            logger.info("Load {} users", userContainer.users.length);
-                            userRepository.save(Arrays.asList(userContainer.users));
-
-                        }
-                        if (entryName.contains("location")) {
-                            LocationContainer container = Json.serializer().fromInputStream(is, LocationContainer.typeRef());
-                            logger.info("Load {} locations", container.locations.length);
-                            locationRepository.save(Arrays.asList(container.locations));
-                        }
-                        if (entryName.contains("visit")) {
-                            VisitContainer container = Json.serializer().fromInputStream(is, VisitContainer.typeRef());
-                            logger.info("Load {} visits", container.visits.length);
-                            visitRepository.save(Arrays.asList(container.visits));
-                        }
+                    String entryName = entry.getName();
+                    if (entryName.contains("users")) {
+                        futureList.add(executor.submit(new LoadUsers(entry, file, null)));
                     }
+                    if (entryName.contains("location")) {
+                        futureList.add(executor.submit(new LoadLocation(entry, file, null)));
+                    }
+                    if (entryName.contains("visit")) {
+                        futureList.add(executor.submit(new LoadVisit(entry, file, null)));
+                    }
+
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -79,75 +76,136 @@ public class Loader {
         } else {
             Path path = Paths.get(this.path);
             try {
-                Files.list(path).forEach(new Consumer<Path>() {
-                    @Override
-                    public void accept(Path path) {
-                        File file = path.toFile();
-                        try (InputStream is = Files.newInputStream(path)) {
-                            String fileName = file.getName();
-                            if (fileName.contains("users")) {
-                                UserContainer userContainer = Json.serializer().fromInputStream(is, UserContainer.typeRef());
-                                logger.info("Load {} users", userContainer.users.length);
-                                userRepository.save(Arrays.asList(userContainer.users));
-                            }
-                            if (fileName.contains("location")) {
-                                LocationContainer container = Json.serializer().fromInputStream(is, LocationContainer.typeRef());
-                                logger.info("Load {} locations", container.locations.length);
-                                locationRepository.save(Arrays.asList(container.locations));
-                            }
-                            if (fileName.contains("visit")) {
-                                VisitContainer container = Json.serializer().fromInputStream(is, VisitContainer.typeRef());
-                                logger.info("Load {} visits", container.visits.length);
-                                visitRepository.save(Arrays.asList(container.visits));
-                            }
-                        } catch (IOException e) {
-                            throw new RuntimeException();
-                        }
-
+                Files.list(path).forEach(path1 -> {
+                    File file = path1.toFile();
+                    String fileName = file.getName();
+                    if (fileName.contains("users")) {
+                        futureList.add(executor.submit(new LoadUsers(null, null, file)));
                     }
+                    if (fileName.contains("location")) {
+                        futureList.add(executor.submit(new LoadLocation(null, null, file)));
+                    }
+                    if (fileName.contains("visit")) {
+                        futureList.add(executor.submit(new LoadVisit(null, null, file)));
+                    }
+
                 });
             } catch (IOException e) {
                 throw new RuntimeException();
             }
         }
+        int all = 0;
+        logger.info("All files {}", futureList.size());
+        int done = 0;
+        for (Future<Integer> future : futureList) {
+            try {
+                all = all + future.get();
+                done++;
+                if (done % 10 == 0) {
+                    logger.info("done {}", done);
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        logger.info("Load {} records", all);
     }
 
-    public static class UserContainer {
-        private UserContainer() {
+
+    private class LoadLocation implements Callable<Integer> {
+
+        private final ZipEntry entry;
+        private final ZipFile zipFile;
+        private final File file;
+
+        public LoadLocation(ZipEntry entry, ZipFile zipFile, File file) {
+            this.entry = entry;
+            this.zipFile = zipFile;
+            this.file = file;
         }
 
-        public User[] users;
-        private static final TypeReference<UserContainer> typeRef = new TypeReference<UserContainer>() {
-        };
-
-        public static TypeReference<UserContainer> typeRef() {
-            return typeRef;
+        @Override
+        public Integer call() throws Exception {
+            try (InputStream is = getInputStream(entry, zipFile, file)) {
+                try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
+                    iter.readString();
+                    Location[] locations = iter.read(Location[].class);
+                    locationRepository.save(locations);
+                    return locations.length;
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (Exception io) {
+                throw new RuntimeException(io);
+            }
         }
     }
 
-    public static class LocationContainer {
-        private LocationContainer() {
+    private class LoadVisit implements Callable<Integer> {
+
+
+        private final ZipEntry entry;
+        private final ZipFile zipFile;
+        private final File file;
+
+        public LoadVisit(ZipEntry entry, ZipFile zipFile, File file) {
+            this.entry = entry;
+            this.zipFile = zipFile;
+            this.file = file;
         }
 
-        public Location[] locations;
-
-        private static final TypeReference<LocationContainer> typeRef = new TypeReference<LocationContainer>() {};
-
-        public static TypeReference<LocationContainer> typeRef() {
-            return typeRef;
+        @Override
+        public Integer call() throws Exception {
+            try (InputStream is = getInputStream(entry, zipFile, file)) {
+//                logger.info("load visit");
+                try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
+//                    logger.info("load " + );
+                    iter.readString();
+                    Visit[] visits = iter.read(Visit[].class);
+                    visitRepository.save(visits);
+                    return visits.length;
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (Exception io) {
+                throw new RuntimeException(io);
+            }
         }
     }
 
-    public static class VisitContainer {
-        private VisitContainer() {
+    public class LoadUsers implements Callable<Integer> {
+
+        private ZipEntry entry;
+        private ZipFile zipFile;
+        private final File file;
+
+        public LoadUsers(ZipEntry entry, ZipFile zipFile, File file) {
+            this.entry = entry;
+            this.zipFile = zipFile;
+            this.file = file;
         }
 
-        public Visit[] visits;
-        private static final TypeReference<VisitContainer> typeRef = new TypeReference<VisitContainer>() {
-        };
-
-        public static TypeReference<VisitContainer> typeRef() {
-            return typeRef;
+        @Override
+        public Integer call() throws Exception {
+            try (InputStream is = getInputStream(entry, zipFile, file)) {
+                try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
+                    iter.readString();
+                    User[] users = iter.read(User[].class);
+                    userRepository.save(users);
+                    return users.length;
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            } catch (Exception io) {
+                throw new RuntimeException(io);
+            }
         }
+    }
+
+    private static InputStream getInputStream(ZipEntry entry, ZipFile zipFile, File file) throws IOException {
+        if (file != null) {
+            return Files.newInputStream(file.toPath());
+        }
+        return zipFile.getInputStream(entry);
     }
 }

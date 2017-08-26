@@ -1,6 +1,7 @@
 package io.github.volyx.ratpack.handler;
 
-import io.github.volyx.ratpack.json.ValidationException;
+import com.jsoniter.spi.JsonException;
+import io.github.volyx.ratpack.exception.ValidationException;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 
@@ -20,7 +21,7 @@ public class ErrorHandler implements HttpHandler {
                 return;
             }
             handler.handleRequest(exchange);
-        } catch (ValidationException e) {
+        } catch (ValidationException | JsonException e) {
             if(exchange.isResponseChannelAvailable()) {
                 Exchange.error().badRequest(exchange, "Validation error " + e.getMessage() );
             }

@@ -10,12 +10,12 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class UserRepository {
-    private Map<Integer, User> users = new ConcurrentHashMap<>(10000);
+    private Map<Integer, User> users = new ConcurrentHashMap<>(1000000);
     public void save(@Nonnull User user) {
         users.put(user.id, user);
     }
 
-    public void save(@Nonnull List<User> users) {
+    public void save(@Nonnull User[] users) {
         for (User user : users) {
             save(user);
         }

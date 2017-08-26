@@ -1,15 +1,21 @@
 package io.github.volyx.ratpack.model;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+
+import com.jsoniter.annotation.JsonProperty;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-public class Location implements Serializable {
+public class Location {
+    @JsonProperty(required = true)
     public Integer id;
+    @JsonProperty(required = true)
     public String place;
+    @JsonProperty(required = true)
     public String country;
+    @JsonProperty(required = true)
     public String city;
+    @JsonProperty(required = true)
     public Integer distance;
 
     public Location(Integer id, String place, String country, String city, Integer distance) {
@@ -28,10 +34,6 @@ public class Location implements Serializable {
         this.distance = null;
     }
 
-    private static final TypeReference<Location> typeRef = new TypeReference<Location>() {};
-    public static TypeReference<Location> typeRef() {
-        return typeRef;
-    }
 
     @Override
     public boolean equals(Object o) {

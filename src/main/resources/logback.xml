@@ -8,6 +8,8 @@
         </encoder>
     </appender>
 
+    <logger name="org.xnio.nio.selector" level="INFO"/>
+
     <root level="info">
         <appender-ref ref="STDOUT"/>
     </root>

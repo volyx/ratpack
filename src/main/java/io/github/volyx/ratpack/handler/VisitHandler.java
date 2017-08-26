@@ -2,6 +2,7 @@ package io.github.volyx.ratpack.handler;
 
 import io.github.volyx.ratpack.model.Visit;
 import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.update.VisitUpdate;
 import io.github.volyx.ratpack.validate.VisitValidator;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.PathTemplateMatch;
@@ -54,14 +55,9 @@ public class VisitHandler {
             return;
         }
 
-        Visit update = Exchange.body().parseJson(exchange, Visit.typeRef());
+        VisitUpdate update = Exchange.body().parseJson(exchange, VisitUpdate.class);
         if (update == null) {
             Exchange.error().badRequest(exchange, "Update is null " + visit.id);
-            return;
-        }
-        String violations = validator.validateUpdate(update);
-        if (!violations.isEmpty()) {
-            Exchange.error().badRequest(exchange, "Validation " + violations);
             return;
         }
         if (update.location != null) {
@@ -84,12 +80,8 @@ public class VisitHandler {
     }
 
     public void create(HttpServerExchange exchange) {
-        Visit visit = Exchange.body().parseJson(exchange, Visit.typeRef());
-        String violations = validator.validateNew(visit);
-        if (!violations.isEmpty()) {
-            Exchange.error().badRequest(exchange, "Validation " + violations);
-            return;
-        }
+        Visit visit = Exchange.body().parseJson(exchange, Visit.class);
+        validator.validateNew(visit);
         visitRepository.save(visit);
         Exchange.body().sendEmptyJson(exchange);
     }

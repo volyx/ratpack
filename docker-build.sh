@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
 
-./gradlew clean shadowJar
+./mvnw.cmd clean package
 
 docker build --rm  -t ratpack .

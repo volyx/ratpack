@@ -1,5 +1,7 @@
 package io.github.volyx.ratpack;
 
+import com.jsoniter.DecodingMode;
+import com.jsoniter.JsonIterator;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import io.github.volyx.ratpack.handler.ErrorHandler;
@@ -9,12 +11,15 @@ import io.github.volyx.ratpack.handler.LocationHandler;
 import io.github.volyx.ratpack.handler.PostHttpHandler;
 import io.github.volyx.ratpack.handler.UserHandler;
 import io.github.volyx.ratpack.handler.VisitHandler;
+import io.github.volyx.ratpack.model.Location;
+import io.github.volyx.ratpack.model.User;
+import io.github.volyx.ratpack.model.Visit;
 import io.github.volyx.ratpack.repository.LocationRepository;
 import io.github.volyx.ratpack.repository.UserRepository;
 import io.github.volyx.ratpack.repository.VisitRepository;
 import io.undertow.Handlers;
-import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
+import io.undertow.Undertow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +44,28 @@ public class Main {
         log.info("Profile {}", profile);
 
         int port = config.getInt("port");
+        JsonIterator.setMode(DecodingMode.STATIC_MODE);
+        JsonIterator.enableStreamingSupport();
+        JsonIterator.enableAnnotationSupport();
+
+        try (JsonIterator iterator = JsonIterator.parse("[]")) {
+            iterator.read(User[].class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try (JsonIterator iterator = JsonIterator.parse("[]")) {
+            iterator.read(Visit[].class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try (JsonIterator iterator = JsonIterator.parse("[]")) {
+            iterator.read(Location[].class);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         UserRepository userRepo = new UserRepository();
         LocationRepository locationRepo = new LocationRepository();
         VisitRepository visitRepo = new VisitRepository(locationRepo);
@@ -79,6 +106,7 @@ public class Main {
                         .add("/locations/{id}", errorHandler(new GetPostHttpHandler(locationHandler::get, locationHandler::update)))
                         .add("/locations/new", errorHandler(new PostHttpHandler(locationHandler::create)))
                         .add("/locations/{id}/avg", errorHandler(new GetHttpHandler(locationHandler::avg)))
+                        .add("/tests/{id}", errorHandler(new GetHttpHandler(locationHandler::test)))
                 )
                 .build();
         server.start();

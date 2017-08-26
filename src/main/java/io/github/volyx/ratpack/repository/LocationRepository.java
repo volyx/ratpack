@@ -14,7 +14,7 @@ public class LocationRepository {
         locations.put(location.id, location);
     }
 
-    public void save(@Nonnull List<Location> locations) {
+    public void save(@Nonnull Location[] locations) {
         for (Location location : locations) {
             save(location);
         }

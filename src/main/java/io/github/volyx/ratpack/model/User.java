@@ -1,12 +1,17 @@
 package io.github.volyx.ratpack.model;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.jsoniter.annotation.JsonProperty;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-public class User implements Serializable {
+public class User {
+    public Integer id;
+    public String email;
+    public String first_name;
+    public String last_name;
+    public Gender gender;
+    public Long birth_date;
 
     public User(){
         this.id = null;
@@ -16,22 +21,6 @@ public class User implements Serializable {
         this.gender = null;
         this.birth_date = null;
     }
-    /**
-     * id - уникальный внешний идентификатор пользователя.
-     * Устанавливается тестирующей системой и используется затем, для проверки ответов сервера.
-     * 32-разрядное целое число.
-     */
-    public Integer id;
-    /**
-     * email - адрес электронной почты пользователя.
-     * Тип - unicode-строка длиной до 100 символов.
-     * Гарантируется уникальность.
-     */
-    public String email;
-    public String first_name;
-    public String last_name;
-    public Gender gender;
-    public Long birth_date;
 
     public User(Integer id, String email, String first_name, String last_name, Gender gender, Long birth_date) {
         this.id = id;
@@ -67,8 +56,4 @@ public class User implements Serializable {
         return Objects.hash(id);
     }
 
-    private static final TypeReference<User> typeRef = new TypeReference<User>() {};
-    public static TypeReference<User> typeRef() {
-        return typeRef;
-    }
 }

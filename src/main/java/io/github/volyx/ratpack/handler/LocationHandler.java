@@ -1,5 +1,6 @@
 package io.github.volyx.ratpack.handler;
 
+import io.github.volyx.ratpack.model.Avg;
 import io.github.volyx.ratpack.model.Gender;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
@@ -7,6 +8,7 @@ import io.github.volyx.ratpack.model.Visit;
 import io.github.volyx.ratpack.repository.LocationRepository;
 import io.github.volyx.ratpack.repository.UserRepository;
 import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.update.LocationUpdate;
 import io.github.volyx.ratpack.utils.Utils;
 import io.github.volyx.ratpack.validate.LocationValidator;
 import io.undertow.server.HttpServerExchange;
@@ -71,16 +73,16 @@ public class LocationHandler {
             return;
         }
 
-        Location update = Exchange.body().parseJson(exchange, Location.typeRef());
+        LocationUpdate update = Exchange.body().parseJson(exchange, LocationUpdate.class);
         if (update == null) {
             Exchange.error().badRequest(exchange, "Update is null " + location.id);
             return;
         }
-        String violations = validator.validateUpdate(update);
-        if (!violations.isEmpty()) {
-            Exchange.error().badRequest(exchange,  "Validation " + violations);
-            return;
-        }
+//        String violations = validator.validateUpdate(update);
+//        if (!violations.isEmpty()) {
+//            Exchange.error().badRequest(exchange,  "Validation " + violations);
+//            return;
+//        }
         location.id = id;
         if (!Utils.isNullOrEmpty(update.place )) {
             location.place = update.place;
@@ -99,17 +101,14 @@ public class LocationHandler {
     }
 
     public void create(@Nonnull HttpServerExchange exchange) {
-        Location location = Exchange.body().parseJson(exchange, Location.typeRef());
-        String violations = validator.validateNew(location);
-        if (!violations.isEmpty()) {
-            Exchange.error().badRequest(exchange,  "Validation " + violations);
-            return;
-        }
+        Location location = Exchange.body().parseJson(exchange, Location.class);
+        validator.validateNew(location);
         locationRepository.save(location);
         Exchange.body().sendEmptyJson(exchange);
     }
 
     public void avg(@Nonnull HttpServerExchange exchange) {
+
         PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
         String idParam = pathMatch.getParameters().get("id");
         Integer id;
@@ -127,7 +126,7 @@ public class LocationHandler {
         }
 
         Optional<String> fromDateOpt = Exchange.queryParams().queryParam(exchange,"fromDate");
-        final Long from;
+        @Nullable final Long from;
         if (fromDateOpt.isPresent()) {
             from = getLong(fromDateOpt.get(), 0L);
             if (from == null) {
@@ -135,11 +134,11 @@ public class LocationHandler {
                 return;
             }
         } else {
-            from = 0L;
+            from = null;
         }
 
         Optional<String> toDateOpt = Exchange.queryParams().queryParam(exchange,"toDate");
-        final Long to;
+        @Nullable final Long to;
         if (toDateOpt.isPresent()) {
             to = getLong(toDateOpt.get(), Long.MAX_VALUE);
             if (to == null) {
@@ -147,10 +146,10 @@ public class LocationHandler {
                 return;
             }
         } else {
-            to = Long.MAX_VALUE;
+            to = null;
         }
         Optional<String> fromAgeOpt = Exchange.queryParams().queryParam(exchange,"fromAge");
-        final Integer fromAge;
+        @Nullable final Integer fromAge;
         if (fromAgeOpt.isPresent()) {
             fromAge = getInteger(fromAgeOpt.get(), 0);
             if (fromAge == null) {
@@ -158,11 +157,11 @@ public class LocationHandler {
                 return;
             }
         } else {
-            fromAge = 0;
+            fromAge = null;
         }
 
         Optional<String> toAgeOpt = Exchange.queryParams().queryParam(exchange,"toAge");
-        final Integer toAge;
+        @Nullable final Integer toAge;
         if (toAgeOpt.isPresent()) {
             toAge = getInteger(toAgeOpt.get(), 0);
             if (toAge == null) {
@@ -170,7 +169,7 @@ public class LocationHandler {
                 return;
             }
         } else {
-            toAge = Integer.MAX_VALUE;
+            toAge = null;
         }
         Optional<String> genderOpt = Exchange.queryParams().queryParam(exchange,"gender");
         final Gender gender;
@@ -183,45 +182,48 @@ public class LocationHandler {
         } else {
             gender = null;
         }
-;
-        double avg = visitRepository.findByLocationId(location.id).stream().filter(v -> {
 
-            if (v.visited_at < from || to < v.visited_at) {
-                return false;
-            }
+        Exchange.error().notFound(exchange,  "Not used");
+        return;
 
-            User user = userRepository.findById(v.user);
-
-            if (user == null) {
-                throw new RuntimeException();
-            }
-
-            Integer age = Utils.getAge(user.birth_date);
-
-            if (age <= fromAge || age >= toAge) {
-                return false;
-            }
-
-            if (gender != null && !gender.equals(user.gender)) {
-                return false;
-            }
-
-            return true;
-        }).collect(Collectors.averagingDouble(value -> (double) value.mark));
-
-        Avg avgContainer = new Avg(avg);
-        Exchange.body().sendJson(exchange, avgContainer);
+//        double avg = visitRepository.findByLocationId(location.id).stream().filter(v -> {
+//
+//            if (from != null && v.visited_at < from) {
+//                return false;
+//            }
+//
+//            if (to != null &&  to < v.visited_at) {
+//                return false;
+//            }
+//            User user = userRepository.findById(v.user);
+//
+//            if (user == null) {
+//                throw new RuntimeException();
+//            }
+//
+//            Integer age = Utils.getAge(user.birth_date);
+//
+//            if (fromAge != null && age <= fromAge ) {
+//                return false;
+//            }
+//
+//            if (toAge != null && age >= toAge) {
+//                return false;
+//            }
+//
+//            if (gender != null && !gender.equals(user.gender)) {
+//                return false;
+//            }
+//
+//            return true;
+//        }).collect(Collectors.averagingDouble(value -> (double) value.mark));
+//
+//        Avg avgContainer = new Avg(avg);
+//        Exchange.body().sendJson(exchange, avgContainer);
     }
 
-    public class Avg {
-        public Double avg;
-
-        public Avg(double avg) {
-//            this.avg = (double) Math.round (avg * 100000.0) / 100000.0;  ;
-            this.avg = BigDecimal.valueOf(avg)
-                    .setScale(5, RoundingMode.HALF_UP)
-                    .doubleValue();;
-        }
+    public void test(HttpServerExchange exchange) {
+        Exchange.body().sendEmptyJson(exchange);
     }
 
 }
