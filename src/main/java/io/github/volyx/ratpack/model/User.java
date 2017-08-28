@@ -1,6 +1,6 @@
 package io.github.volyx.ratpack.model;
 
-import com.jsoniter.annotation.JsonProperty;
+import net.openhft.chronicle.bytes.BytesMarshallable;
 
 import java.io.Serializable;
 import java.util.Objects;

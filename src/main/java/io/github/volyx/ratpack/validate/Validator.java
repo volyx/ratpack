@@ -18,30 +18,30 @@ public interface Validator<T> {
         }
     }
     default void validateCountry(@Nonnull String country) {
-        if (country.length() >= 50) {
+        if (country.length() > 50) {
             throw new ValidationException("country not valid " + country);
         }
     }
 
     default void validateCity(@Nonnull String city) {
-        if (city.length() >= 50) {
+        if (city.length() > 50) {
             throw new ValidationException("city not valid " + city);
         }
     }
     default void validateEmail(@Nonnull String email) {
-        if (email.length() >= 100) {
+        if (email.length() > 100) {
             throw new ValidationException("city not valid " + email);
         }
     }
 
     default void validateFirstName(@Nonnull String name) {
-        if (name.length() >= 50) {
+        if (name.length() > 50) {
             throw new ValidationException("first name not valid " + name);
         }
     }
 
     default void validateLastName(@Nonnull String name) {
-        if (name.length() >= 50) {
+        if (name.length() > 50) {
             throw new ValidationException("last name not valid " + name);
         }
     }

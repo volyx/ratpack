@@ -1,11 +1,12 @@
 package io.github.volyx.ratpack.model;
 
 import com.jsoniter.annotation.JsonProperty;
+import net.openhft.chronicle.bytes.BytesMarshallable;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-public class Visit {
+public class Visit implements BytesMarshallable {
     @JsonProperty(required = true)
     public Integer id;
     @JsonProperty(required = true)
@@ -17,7 +18,7 @@ public class Visit {
     @JsonProperty(required = true)
     public Integer mark;
 
-    Visit(Integer id, Integer location, Integer user, Long visited_at, Integer mark) {
+    public Visit(Integer id, Integer location, Integer user, Long visited_at, Integer mark) {
         this.id = id;
         this.location = location;
         this.user = user;

@@ -5,9 +5,8 @@ import com.typesafe.config.Config;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
-import io.github.volyx.ratpack.repository.LocationRepository;
-import io.github.volyx.ratpack.repository.UserRepository;
-import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.repository.Repository;
+import io.github.volyx.ratpack.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,19 +34,13 @@ public class Loader {
     @Nonnull
     private final String path;
     @Nonnull
-    private final UserRepository userRepository;
-    @Nonnull
-    private final LocationRepository locationRepository;
-    @Nonnull
-    private final VisitRepository visitRepository;
+    private final Repository repository;
     @Nonnull
     private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
 
-    public Loader(@Nonnull Config config, @Nonnull UserRepository userRepository, @Nonnull LocationRepository locationRepository, @Nonnull VisitRepository visitRepository) {
+    public Loader(@Nonnull Config config, @Nonnull Repository repository) {
         this.path = config.getString("load.path");
-        this.userRepository = userRepository;
-        this.locationRepository = locationRepository;
-        this.visitRepository = visitRepository;
+        this.repository = repository;
     }
 
     void load() {
@@ -130,13 +123,15 @@ public class Loader {
                 try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
                     iter.readString();
                     Location[] locations = iter.read(Location[].class);
-                    locationRepository.save(locations);
+                    repository.save(locations);
                     return locations.length;
                 } catch (Exception e) {
+                    logger.error(e.getMessage(), e);
                     throw new RuntimeException(e);
                 }
-            } catch (Exception io) {
-                throw new RuntimeException(io);
+            } catch (Exception e) {
+                logger.error(e.getMessage(), e);
+                throw new RuntimeException(e);
             }
         }
     }
@@ -162,13 +157,15 @@ public class Loader {
 //                    logger.info("load " + );
                     iter.readString();
                     Visit[] visits = iter.read(Visit[].class);
-                    visitRepository.save(visits);
+                    repository.save(visits);
                     return visits.length;
                 } catch (Exception e) {
+                    logger.error(e.getMessage(), e);
                     throw new RuntimeException(e);
                 }
-            } catch (Exception io) {
-                throw new RuntimeException(io);
+            } catch (Exception e) {
+                logger.error(e.getMessage(), e);
+                throw new RuntimeException(e);
             }
         }
     }
@@ -191,13 +188,18 @@ public class Loader {
                 try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
                     iter.readString();
                     User[] users = iter.read(User[].class);
-                    userRepository.save(users);
+                    for (User user : users) {
+                        Utils.getAge(user.birth_date);
+                    }
+                    repository.save(users);
                     return users.length;
                 } catch (Exception e) {
+                    logger.error(e.getMessage(), e);
                     throw new RuntimeException(e);
                 }
-            } catch (Exception io) {
-                throw new RuntimeException(io);
+            } catch (Exception e) {
+                logger.error(e.getMessage(), e);
+                throw new RuntimeException(e);
             }
         }
     }

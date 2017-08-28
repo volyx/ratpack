@@ -1,5 +1,7 @@
 package io.github.volyx.ratpack;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
 import com.jsoniter.DecodingMode;
 import com.jsoniter.JsonIterator;
 import com.typesafe.config.Config;
@@ -14,14 +16,13 @@ import io.github.volyx.ratpack.handler.VisitHandler;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
-import io.github.volyx.ratpack.repository.LocationRepository;
-import io.github.volyx.ratpack.repository.UserRepository;
-import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.repository.Repository;
 import io.undertow.Handlers;
 import io.undertow.server.HttpHandler;
 import io.undertow.Undertow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xnio.Options;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -30,12 +31,17 @@ import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 public class Main {
 
     private static final Logger log = LoggerFactory.getLogger(Main.class);
     public static Long timestamp;
+    public static MetricRegistry metricRegistry = new MetricRegistry();
 
     public static void main(String[] args) {
         String profile = System.getProperty("profile");
@@ -66,12 +72,10 @@ public class Main {
             throw new RuntimeException(e);
         }
 
-        UserRepository userRepo = new UserRepository();
-        LocationRepository locationRepo = new LocationRepository();
-        VisitRepository visitRepo = new VisitRepository(locationRepo);
-        UserHandler userHandler = new UserHandler(userRepo, visitRepo);
-        VisitHandler visitHandler = new VisitHandler(visitRepo);
-        LocationHandler locationHandler = new LocationHandler(locationRepo, visitRepo, userRepo);
+        Repository repo = new Repository();
+        UserHandler userHandler = new UserHandler(repo);
+        VisitHandler visitHandler = new VisitHandler(repo);
+        LocationHandler locationHandler = new LocationHandler(repo);
         log.info("Load options.txt");
 
         try (InputStream is = Files.newInputStream(Paths.get(config.getString("options")));) {
@@ -85,14 +89,26 @@ public class Main {
                 }
             }
             timestamp = Objects.requireNonNull(result);
+            log.info("Timestamp {} is {}", timestamp, LocalDateTime.ofEpochSecond(timestamp, 0, ZoneOffset.UTC).format(DateTimeFormatter.ISO_DATE_TIME));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
 
-        Loader loader = new Loader(config, userRepo, locationRepo, visitRepo);
+        final ConsoleReporter reporter = ConsoleReporter.forRegistry(metricRegistry)
+                .convertRatesTo(TimeUnit.SECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .build();
+        reporter.start(3, TimeUnit.MINUTES);
+
+        Loader loader = new Loader(config, repo);
         loader.load();
 
         Undertow server = Undertow.builder()
+//                .setServerOption(Options.KEEP_ALIVE, true)
+                .setIoThreads(1)
+                .setWorkerThreads(1)
+                .setBufferSize(1024)
+                .setDirectBuffers(true)
                 .addHttpListener(port, "0.0.0.0")
                 .setHandler(Handlers
                         .pathTemplate()

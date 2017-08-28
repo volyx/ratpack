@@ -1,12 +1,13 @@
 package io.github.volyx.ratpack.handler;
 
+import com.codahale.metrics.Timer;
+import com.google.common.base.Strings;
+import io.github.volyx.ratpack.Main;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.VisitList;
 import io.github.volyx.ratpack.model.VisitPlace;
-import io.github.volyx.ratpack.repository.UserRepository;
-import io.github.volyx.ratpack.repository.VisitRepository;
+import io.github.volyx.ratpack.repository.Repository;
 import io.github.volyx.ratpack.update.UserUpdate;
-import io.github.volyx.ratpack.utils.Utils;
 import io.github.volyx.ratpack.validate.UserValidator;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.util.PathTemplateMatch;
@@ -16,130 +17,178 @@ import javax.annotation.Nullable;
 import java.util.List;
 import java.util.Optional;
 
-public class UserHandler {
-    private final UserRepository userRepository;
-    private final VisitRepository visitRepository;
-    private final UserValidator validator = new UserValidator();
+import static com.codahale.metrics.MetricRegistry.name;
 
-    public UserHandler(@Nonnull UserRepository userRepository, @Nonnull VisitRepository visitRepository) {
-        this.userRepository = userRepository;
-        this.visitRepository = visitRepository;
+public class UserHandler {
+    private final Repository repo;
+    private final UserValidator validator = new UserValidator();
+    private final Timer getTimer;
+    private final Timer updateTimer;
+    private final Timer createTimer;
+    private final Timer visitsTimer;
+
+    public UserHandler(@Nonnull Repository userRepository) {
+        this.repo = userRepository;
+        this.getTimer = Main.metricRegistry.timer(name(UserHandler.class, "get"));
+        this.createTimer = Main.metricRegistry.timer(name(UserHandler.class, "create"));
+        this.updateTimer = Main.metricRegistry.timer(name(UserHandler.class, "update"));
+        this.visitsTimer = Main.metricRegistry.timer(name(UserHandler.class, "visits"));
     }
 
     public void get(@Nonnull HttpServerExchange exchange) {
-        PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
-        String idParam = pathMatch.getParameters().get("id");
-        Integer id;
+        final Timer.Context context = getTimer.time();
         try {
-            id = Integer.parseInt(idParam);
-        } catch (NumberFormatException e) {
-            Exchange.error().notFound(exchange, "Not found " + idParam);
-            return;
+            PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+            String idParam = pathMatch.getParameters().get("id");
+            Integer id;
+            try {
+                id = Integer.parseInt(idParam);
+            } catch (NumberFormatException e) {
+                Exchange.error().notFound(exchange, "Not found " + idParam);
+                return;
+            }
+            @Nullable User user = repo.findById(id, User.class);
+            if (user == null) {
+                Exchange.error().notFound(exchange, "Not found user by" + idParam);
+                return;
+            }
+            Exchange.body().sendJson(exchange, user);
+        } finally {
+            context.stop();
         }
-        @Nullable User user = userRepository.findById(id);
-        if (user == null) {
-            Exchange.error().notFound(exchange, "Not found user by" + idParam);
-            return;
-        }
-        Exchange.body().sendJson(exchange, user);
     }
 
     public void update(@Nonnull HttpServerExchange exchange) {
-        PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
-        String idParam = pathMatch.getParameters().get("id");
-        Integer id;
+        final Timer.Context context = updateTimer.time();
         try {
-            id = Integer.parseInt(idParam);
-        } catch (NumberFormatException e) {
-            Exchange.error().notFound(exchange, "Bad format id " + idParam);
-            return;
-        }
-        @Nullable User user = userRepository.findById(id);
-        if (user == null) {
-            Exchange.error().notFound(exchange, "Not found " + idParam);
-            return;
-        }
+            // handle request
 
-       UserUpdate update = Exchange.body().parseJson(exchange, UserUpdate.class);
-        if (update == null) {
-            Exchange.error().badRequest(exchange, "Update is null " + user.id);
-            return;
-        }
+            PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+            String idParam = pathMatch.getParameters().get("id");
+            Integer id;
+            try {
+                id = Integer.parseInt(idParam);
+            } catch (NumberFormatException e) {
+                Exchange.error().notFound(exchange, "Bad format id " + idParam);
+                return;
+            }
+            @Nullable User user = repo.findById(id, User.class);
+            if (user == null) {
+                Exchange.error().notFound(exchange, "Not found " + idParam);
+                return;
+            }
 
-        if (!Utils.isNullOrEmpty(update.last_name)) {
-            user.last_name = update.last_name;
+            UserUpdate update = Exchange.body().parseJson(exchange, UserUpdate.class);
+            if (update == null) {
+                Exchange.error().badRequest(exchange, "Update is null " + user.id);
+                return;
+            }
+
+            if (update.last_name != null) {
+                user.last_name = update.last_name;
+            }
+            if (update.email != null) {
+                user.email = update.email;
+            }
+            if (update.first_name != null) {
+                user.first_name = update.first_name;
+            }
+            if (update.birth_date != null) {
+                user.birth_date = update.birth_date;
+            }
+            if (update.gender != null) {
+                user.gender = update.gender;
+            }
+            repo.save(user);
+            Exchange.body().sendEmptyJson(exchange);
+//        } catch (Exception e) {
+//            System.err.println(e.getMessage());
+        } finally {
+            context.stop();
         }
-        if (!Utils.isNullOrEmpty(update.email)) {
-            user.email = update.email;
-        }
-        if (!Utils.isNullOrEmpty(update.first_name)) {
-            user.first_name = update.first_name;
-        }
-        if (update.birth_date != null) {
-            user.birth_date = update.birth_date;
-        }
-        if (update.gender != null) {
-            user.gender = update.gender;
-        }
-        userRepository.save(user);
-        Exchange.body().sendEmptyJson(exchange);
     }
 
     public void create(@Nonnull HttpServerExchange exchange) {
-        User user = Exchange.body().parseJson(exchange, User.class);
-        validator.validateNew(user);
-        userRepository.save(user);
-        Exchange.body().sendEmptyJson(exchange);
+        final Timer.Context context = createTimer.time();
+        try {
+
+            User user = Exchange.body().parseJson(exchange, User.class);
+            validator.validateNew(user);
+            repo.save(user);
+            Exchange.body().sendEmptyJson(exchange);     // handle request
+//        } catch (Exception e) {
+//            System.err.println(e.getMessage());
+        } finally {
+            context.stop();
+        }
     }
 
     public void getVisits(@Nonnull HttpServerExchange exchange) {
-        PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
-        String idParam = pathMatch.getParameters().get("id");
-        Integer id;
+        final Timer.Context context = visitsTimer.time();
         try {
-            id = Integer.parseInt(idParam);
-        } catch (NumberFormatException e) {
-            Exchange.error().badRequest(exchange, "Bad id " + idParam);
-            return;
-        }
+            // handle request
 
-        User user = userRepository.findById(id);
-
-        if (user == null) {
-            Exchange.error().notFound(exchange, "Not found user by id " + id);
-            return;
-        }
-
-        Optional<String> fromDateOpt =  Exchange.queryParams().queryParam(exchange, "fromDate");
-        Optional<String> toDateOpt = Exchange.queryParams().queryParam(exchange, "toDate");
-        Optional<String> countryOpt = Exchange.queryParams().queryParam(exchange, "country");
-        Optional<String> toDistanceOpt = Exchange.queryParams().queryParam(exchange, "toDistance");
-        Integer distance = null;
-        if (toDistanceOpt.isPresent()) {
-            distance = Utils.getIntegerOrDefault(toDistanceOpt.get(), null);
-            if (distance == null) {
-                Exchange.error().badRequest(exchange,  "Distance format " + toDistanceOpt.get());
+            PathTemplateMatch pathMatch = exchange.getAttachment(PathTemplateMatch.ATTACHMENT_KEY);
+            String idParam = pathMatch.getParameters().get("id");
+            Integer id;
+            try {
+                id = Integer.parseInt(idParam);
+            } catch (NumberFormatException e) {
+                Exchange.error().badRequest(exchange, "Bad id " + idParam);
                 return;
             }
-        }
-        Long from = null;
-        if (fromDateOpt.isPresent()) {
-            from = Utils.getLongOrDefault(fromDateOpt.get(), null);
-            if (from == null) {
-                Exchange.error().badRequest(exchange,  "From format " + fromDateOpt.get());
+
+            User user = repo.findById(id, User.class);
+
+            if (user == null) {
+                Exchange.error().notFound(exchange, "Not found user by id " + id);
                 return;
             }
-        }
-        Long to = null;
-        if (toDateOpt.isPresent()) {
-            to = Utils.getLongOrDefault(toDateOpt.get(), null);
-            if (to == null) {
-                Exchange.error().badRequest(exchange,  "To format " + toDateOpt.get());
-                return;
+
+            Optional<String> fromDateOpt = Exchange.queryParams().queryParam(exchange, "fromDate");
+            Optional<String> toDateOpt = Exchange.queryParams().queryParam(exchange, "toDate");
+            Optional<String> countryOpt = Exchange.queryParams().queryParam(exchange, "country");
+            Optional<String> toDistanceOpt = Exchange.queryParams().queryParam(exchange, "toDistance");
+//            System.out.println(fromDateOpt + " " + toDateOpt + " " + countryOpt + " " + toDistanceOpt);
+            @Nullable final Integer distance;
+            if (toDistanceOpt.isPresent()) {
+                try {
+                    distance = Integer.parseInt(toDistanceOpt.get());
+                } catch (NumberFormatException ignored) {
+                    Exchange.error().badRequest(exchange, "Distance format " + toDistanceOpt.get());
+                    return;
+                }
+            } else {
+                distance = null;
             }
+            @Nullable final Long from;
+            if (fromDateOpt.isPresent()) {
+                try {
+                    from = Long.parseLong(fromDateOpt.get());
+                } catch (NumberFormatException ignored) {
+                    Exchange.error().badRequest(exchange, "From format " + fromDateOpt.get());
+                    return;
+                }
+            } else {
+                from = null;
+            }
+            @Nullable final Long to;
+            if (toDateOpt.isPresent()) {
+                try {
+                    to = Long.parseLong(toDateOpt.get());
+                } catch (NumberFormatException ignored) {
+                    Exchange.error().badRequest(exchange, "To format " + toDateOpt.get());
+                    return;
+                }
+            } else {
+                to = null;
+            }
+            String country = countryOpt.orElse(null);
+//            System.out.println(id + " " + from + " " + to + " " + country + " " + distance);
+            final List<VisitPlace> visits = repo.findVisits(id, from, to, country, distance);
+            Exchange.body().sendJson(exchange, new VisitList(visits));
+        } finally {
+            context.stop();
         }
-        String country = countryOpt.orElse(null);
-        final List<VisitPlace> visits = visitRepository.findVisits(id, from, to, country, distance);
-        Exchange.body().sendJson(exchange, new VisitList(visits));
     }
 }

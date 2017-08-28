@@ -4,6 +4,7 @@ package io.github.volyx.ratpack.handler;
 import io.undertow.server.HttpServerExchange;
 
 import java.util.Deque;
+import java.util.Map;
 import java.util.Optional;
 
 public interface QueryParams {
@@ -23,5 +24,9 @@ public interface QueryParams {
 
     default Optional<Boolean> queryParamAsBoolean(HttpServerExchange exchange, String name) {
         return queryParam(exchange, name).map(Boolean::parseBoolean);
+    }
+
+    default Map<String, Deque<String>> all(HttpServerExchange exchange) {
+        return exchange.getQueryParameters();
     }
 }

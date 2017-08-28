@@ -10,6 +10,7 @@ public class Exchange {
 
     public static interface QueryParamImpl extends QueryParams {};
     private static final QueryParamImpl QUERYPARAMS = new QueryParamImpl(){};
+
     public static QueryParamImpl queryParams() {
         return QUERYPARAMS;
     }

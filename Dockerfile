@@ -2,7 +2,7 @@ FROM openjdk:8u131-jre-alpine
 
 RUN mkdir /data
 
-COPY build/libs/ratpack-java-demo-1.0-SNAPSHOT-all.jar /
+COPY target/ratpack-1.0-SNAPSHOT.jar /
 
 CMD sysctl -w net.core.rmem_max=16777216 \
     sysctl -w net.core.wmem_max=16777216 \
@@ -16,4 +16,4 @@ CMD sysctl -w net.core.rmem_max=16777216 \
     sysctl -w net.ipv4.tcp_tw_recycle=1 \
 
 EXPOSE 80
-ENTRYPOINT ["java", "-Xmx4G", "-Xms256m", "-Dprofile=prod", "-jar", "ratpack-java-demo-1.0-SNAPSHOT-all.jar"]
+ENTRYPOINT ["java", "-Xmx4G", "-Xms256m", "-Dprofile=prod", "-jar", "ratpack-1.0-SNAPSHOT.jar"]

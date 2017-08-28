@@ -4,9 +4,11 @@ import com.jsoniter.spi.JsonException;
 import io.github.volyx.ratpack.exception.ValidationException;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ErrorHandler implements HttpHandler {
-
+    private static final Logger logger = LoggerFactory.getLogger(ErrorHandler.class);
     private HttpHandler handler;
 
     public ErrorHandler(HttpHandler handler) {
@@ -22,9 +24,13 @@ public class ErrorHandler implements HttpHandler {
             }
             handler.handleRequest(exchange);
         } catch (ValidationException | JsonException e) {
+//            System.err.println(e.getMessage());
             if(exchange.isResponseChannelAvailable()) {
                 Exchange.error().badRequest(exchange, "Validation error " + e.getMessage() );
+
             }
+        } catch (Throwable t) {
+            logger.error(t.getMessage(), t);
         }
     }
 }
