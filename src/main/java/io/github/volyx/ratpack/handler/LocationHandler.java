@@ -19,10 +19,14 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Optional;
 
 import static com.codahale.metrics.MetricRegistry.name;
+import static io.github.volyx.ratpack.Main.timestamp;
 
 public class LocationHandler {
     private static final Logger logger = LoggerFactory.getLogger(LocationHandler.class);
@@ -225,14 +229,22 @@ public class LocationHandler {
                     continue;
                 }
 //                logger.info("{}", user);
-                Integer age = Utils.getAge(user.birth_date);
+//                Integer age = Utils.getAge(user.birth_date);
 
-                if (fromAge != null && age <= fromAge) {
-                    continue;
+                if (fromAge != null) {
+                    LocalDateTime cLDT = LocalDateTime.ofEpochSecond(timestamp, 0, ZoneOffset.UTC);
+                    long fromLDT = cLDT.minus(fromAge, ChronoUnit.YEARS).toEpochSecond(ZoneOffset.UTC);
+                    if (fromLDT <= user.birth_date) {
+                        continue;
+                    }
                 }
 
-                if (toAge != null && age >= toAge) {
-                    continue;
+                if (toAge != null) {
+                    LocalDateTime cLDT = LocalDateTime.ofEpochSecond(timestamp, 0, ZoneOffset.UTC);
+                    long toAgeLDT = cLDT.minus(toAge, ChronoUnit.YEARS).toEpochSecond(ZoneOffset.UTC);
+                    if (toAgeLDT >= user.birth_date) {
+                        continue;
+                    }
                 }
 
                 count++;

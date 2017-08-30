@@ -2,6 +2,7 @@ package io.github.volyx.ratpack;
 
 import com.jsoniter.JsonIterator;
 import com.typesafe.config.Config;
+import gnu.trove.map.hash.TIntObjectHashMap;
 import io.github.volyx.ratpack.model.Location;
 import io.github.volyx.ratpack.model.User;
 import io.github.volyx.ratpack.model.Visit;
@@ -47,7 +48,8 @@ public class Loader {
         logger.info("Begin load {}", path);
         List<Future<Integer>> futureList = new ArrayList<>();
         if (path.endsWith(".zip")) {
-            try (ZipFile file = new ZipFile(Paths.get(path).toFile())) {
+            try {
+                ZipFile file = new ZipFile(Paths.get(path).toFile());
                 Enumeration<? extends ZipEntry> entries = file.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
@@ -119,7 +121,8 @@ public class Loader {
 
         @Override
         public Integer call() throws Exception {
-            try (InputStream is = getInputStream(entry, zipFile, file)) {
+            try {
+                InputStream is = getInputStream(entry, zipFile, file);
                 try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
                     iter.readString();
                     Location[] locations = iter.read(Location[].class);
@@ -151,7 +154,8 @@ public class Loader {
 
         @Override
         public Integer call() throws Exception {
-            try (InputStream is = getInputStream(entry, zipFile, file)) {
+            try {
+                InputStream is = getInputStream(entry, zipFile, file);
 //                logger.info("load visit");
                 try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
 //                    logger.info("load " + );
@@ -184,14 +188,17 @@ public class Loader {
 
         @Override
         public Integer call() throws Exception {
-            try (InputStream is = getInputStream(entry, zipFile, file)) {
+            try {
+                InputStream is = getInputStream(entry, zipFile, file);
                 try (JsonIterator iter = JsonIterator.parse(is, 1024)) {
                     iter.readString();
                     User[] users = iter.read(User[].class);
+                    TIntObjectHashMap userMap = new TIntObjectHashMap(users.length);
                     for (User user : users) {
-                        Utils.getAge(user.birth_date);
+//                        Utils.getAge(user.birth_date);
+                        userMap.put(user.id, user);
                     }
-                    repository.save(users);
+                    repository.save(userMap);
                     return users.length;
                 } catch (Exception e) {
                     logger.error(e.getMessage(), e);

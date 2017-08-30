@@ -44,10 +44,8 @@ public class Repository {
         locations.put(location.id, location);
     }
 
-    public void save(@Nonnull User[] users) {
-        for (User user : users) {
-            save(user);
-        }
+    public void save(@Nonnull TIntObjectHashMap<User> users) {
+       this.users.putAll(users);
     }
 
     @Nullable
